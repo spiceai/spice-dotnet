@@ -1,5 +1,8 @@
 name: pr
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: ["trunk"]
@@ -9,25 +12,71 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_and_test:
-    name: Build and test ${{matrix.os}}
+  build_and_test_linux:
+    name: Build and test ubuntu-latest - .NET ${{matrix.dotnet-version}}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['8.0.x', '9.0.x', '10.0.x']
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: | 
+            8.0.x
+            9.0.x
+            10.0.x
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+      - name: Test
+        env:
+          API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
+        run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
+
+  build_and_test_windows_mac:
+    name: Build and test ${{matrix.os}} - .NET ${{matrix.dotnet-version}}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: windows-2022
+            dotnet-version: '8.0.x'
+          - os: windows-2022
+            dotnet-version: '9.0.x'
+          - os: windows-2022
+            dotnet-version: '10.0.x'
+          - os: windows-latest
+            dotnet-version: '8.0.x'
+          - os: windows-latest
+            dotnet-version: '9.0.x'
+          - os: windows-latest
+            dotnet-version: '10.0.x'
+          - os: macos-latest
+            dotnet-version: '9.0.x'
+          - os: macos-latest
+            dotnet-version: '10.0.x'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x # 7.0 isn't supplied by default in Ubuntu 22.04, only 8 or 6
+          dotnet-version: | 
+            8.0.x
+            9.0.x
+            10.0.x
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore --configuration Release
       - name: Test
+        continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
         env:
           API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}

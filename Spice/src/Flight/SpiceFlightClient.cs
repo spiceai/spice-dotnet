@@ -33,20 +33,58 @@ using Spice.Errors;
 
 namespace Spice.Flight;
 
-internal class SpiceFlightClient
+internal class SpiceFlightClient : IDisposable
 {
     private readonly FlightClient _flightClient;
+    private readonly GrpcChannel _channel;
+    private readonly HttpClient? _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent)
+    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls)
     {
         var options = new GrpcChannelOptions();
 
-        if (appId == null || apiKey == null) return options;
+        if (appId == null || apiKey == null)
+        {
+            // For non-authenticated connections, set credentials based on TLS preference
+            if (!useTls)
+            {
+                options.Credentials = ChannelCredentials.Insecure;
+            }
+#if NET8_0_OR_GREATER
+            else
+            {
+                // Configure HttpHandler for TLS on macOS (.NET 8.0+)
+                var handler = new SocketsHttpHandler
+                {
+                    EnableMultipleHttp2Connections = true
+                };
+                options.HttpHandler = handler;
+            }
+#endif
+            return options;
+        }
 
-
-        options.Credentials = ChannelCredentials.SecureSsl;
-        options.HttpClient = new HttpClient
+        // Set TLS credentials for authenticated connections
+        options.Credentials = useTls ? ChannelCredentials.SecureSsl : ChannelCredentials.Insecure;
+        
+        // Configure HttpHandler for TLS on macOS (.NET 8.0+)
+        HttpMessageHandler messageHandler;
+#if NET8_0_OR_GREATER
+        if (useTls)
+        {
+            messageHandler = new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true
+            };
+        }
+        else
+#endif
+        {
+            messageHandler = new HttpClientHandler();
+        }
+        
+        options.HttpClient = new HttpClient(messageHandler)
         {
             DefaultRequestHeaders =
             {
@@ -66,7 +104,7 @@ internal class SpiceFlightClient
         return responseHeaders.Get("authorization") ?? trailers.Get("authorization");
     }
 
-    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent)
+    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls)
     {
         _retryPolicy = Policy.Handle<RpcException>(ex =>
                 ex.Status.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.Aborted
@@ -79,23 +117,31 @@ internal class SpiceFlightClient
                         $"Request failed. Waiting {timespan} before next retry. Retry attempt {retryAttempt}");
                 });
 
-        var options = GetGrpcChannelOptions(appId, apiKey, userAgent);
+        var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls);
+        _httpClient = options.HttpClient;
 
-        _flightClient = new FlightClient(GrpcChannel.ForAddress(address, options));
+        _channel = GrpcChannel.ForAddress(address, options);
+        _flightClient = new FlightClient(_channel);
 
-        if (appId == null || apiKey == null)
+        if (appId != null && apiKey != null)
         {
-            return;
+            AuthenticateAsync().GetAwaiter().GetResult();
         }
+    }
 
+    private async Task AuthenticateAsync()
+    {
         var stream = _flightClient.Handshake();
 
-        stream.ResponseHeadersAsync.Wait();
+        var headers = await stream.ResponseHeadersAsync.ConfigureAwait(false);
+        var token = GetAuthToken(headers, stream.GetTrailers());
+        
+        if (token == null || _httpClient == null)
+        {
+            throw new SpiceException(SpiceStatus.FailedToAuthenticate, "Failed to authenticate");
+        }
 
-        var token = GetAuthToken(stream.ResponseHeadersAsync.Result, stream.GetTrailers());
-        if (token == null || options.HttpClient == null) throw new SpiceException(SpiceStatus.FailedToAuthenticate, "Failed to authenticate");
-
-        options.HttpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.Value);
+        _httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.Value);
     }
 
     internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)
@@ -116,5 +162,27 @@ internal class SpiceFlightClient
             var stream = _flightClient.GetStream(endpoint.Ticket);
             return stream.ResponseStream;
         });
+    }
+
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            // FlightClient doesn't implement IDisposable, but its underlying channel does
+            _channel?.Dispose();
+            _httpClient?.Dispose();
+        }
+
+        _disposed = true;
     }
 }

@@ -20,13 +20,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-namespace Spice.Config;
+namespace System;
 
-internal static class SpiceDefaultConfigCloud
+internal static class ThrowHelper
 {
-    public static readonly string FlightAddress =
-        Environment.GetEnvironmentVariable("SPICE_FLIGHT_URL") ?? "https://flight.spiceai.io:443";
-    
-    public static readonly string HttpAddress =
-        Environment.GetEnvironmentVariable("SPICE_HTTP_URL") ?? "https://data.spiceai.io";
+    public static void ThrowIfNull(object? argument, string? paramName = null)
+    {
+        if (argument is null)
+        {
+            throw new ArgumentNullException(paramName);
+        }
+    }
+
+    public static void ThrowIfNullOrWhiteSpace(string? argument, string? paramName = null)
+    {
+        if (string.IsNullOrWhiteSpace(argument))
+        {
+            throw new ArgumentException("Value cannot be null or whitespace.", paramName);
+        }
+    }
+
+    public static void ThrowIfNegative(int value, string? paramName = null)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, value, "Value must be non-negative.");
+        }
+    }
 }

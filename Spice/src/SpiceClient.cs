@@ -23,10 +23,11 @@ SOFTWARE.
 using Apache.Arrow.Flight.Client;
 using Spice.Config;
 using Spice.Flight;
+using Spice.Http;
 
 namespace Spice;
 
-public class SpiceClient
+public class SpiceClient : IDisposable
 {
     /// <summary>
     /// Gets or sets the application ID. This property is internal set and can be null.
@@ -49,16 +50,28 @@ public class SpiceClient
     public string FlightAddress { get; internal set; } = SpiceDefaultConfigLocal.FlightAddress;
 
     /// <summary>
+    /// Gets or sets the HTTP address. This property is internal set and defaults to local HTTP endpoint.
+    /// </summary>
+    public string HttpAddress { get; internal set; } = SpiceDefaultConfigLocal.HttpAddress;
+
+    /// <summary>
     /// Gets or sets the maximum number of retries. This property is internal set and defaults to 3.
     /// </summary>
     public int MaxRetries { get; internal set; } = 3;
 
+    /// <summary>
+    /// Gets or sets whether to use TLS for connections. This property is internal set and defaults to false for local connections.
+    /// </summary>
+    public bool UseTls { get; internal set; } = false;
+
     private SpiceFlightClient? FlightClient { get; set; }
+    private ISpiceHttpClient? HttpClient { get; set; }
 
 
     internal void Init()
     {
-        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent);
+        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
+        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent);
     }
 
     /// <summary>
@@ -71,8 +84,60 @@ public class SpiceClient
     /// <exception cref="Grpc.Core.RpcException">gRPC exception</exception>
     public Task<FlightClientRecordBatchStreamReader> Query(string sql)
     {
-        if (FlightClient == null) throw new Exception("FlightClient not initialized");
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
         return FlightClient.Query(sql);
+    }
+
+    /// <summary>
+    /// Refreshes a dataset in the Spice runtime.
+    /// </summary>
+    /// <param name="datasetName">The name of the dataset to refresh</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task RefreshDatasetAsync(string datasetName)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.RefreshDatasetAsync(datasetName);
+    }
+
+    private bool _disposed;
+
+    /// <summary>
+    /// Releases all resources used by the <see cref="SpiceClient"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="SpiceClient"/> and optionally releases the managed resources.
+    /// </summary>
+    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            FlightClient?.Dispose();
+            HttpClient?.Dispose();
+        }
+
+        _disposed = true;
     }
 }
