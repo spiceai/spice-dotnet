@@ -34,7 +34,6 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
       - name: Test
-        continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
         env:
           API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
         run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
@@ -65,15 +64,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - name: Install root certificates (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          # Update CA certificates
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
-          brew install ca-certificates || true
-          security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain > /tmp/certs.pem
-          security find-certificate -a -p /Library/Keychains/System.keychain >> /tmp/certs.pem
-          export SSL_CERT_FILE=/tmp/certs.pem
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -86,7 +76,7 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
       - name: Test
+        continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
         env:
           API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
-          SSL_CERT_FILE: ${{ startsWith(matrix.os, 'macos') && '/tmp/certs.pem' || '' }}
         run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
