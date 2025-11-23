@@ -51,23 +51,26 @@ internal class SpiceFlightClient : IDisposable
             {
                 options.Credentials = ChannelCredentials.Insecure;
             }
+#if NET8_0_OR_GREATER
             else
             {
-                // Configure HttpHandler for TLS on macOS
+                // Configure HttpHandler for TLS on macOS (.NET 8.0+)
                 var handler = new SocketsHttpHandler
                 {
                     EnableMultipleHttp2Connections = true
                 };
                 options.HttpHandler = handler;
             }
+#endif
             return options;
         }
 
         // Set TLS credentials for authenticated connections
         options.Credentials = useTls ? ChannelCredentials.SecureSsl : ChannelCredentials.Insecure;
         
-        // Configure HttpHandler for TLS on macOS
+        // Configure HttpHandler for TLS on macOS (.NET 8.0+)
         HttpMessageHandler messageHandler;
+#if NET8_0_OR_GREATER
         if (useTls)
         {
             messageHandler = new SocketsHttpHandler
@@ -76,6 +79,7 @@ internal class SpiceFlightClient : IDisposable
             };
         }
         else
+#endif
         {
             messageHandler = new HttpClientHandler();
         }
