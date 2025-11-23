@@ -33,9 +33,11 @@ using Spice.Errors;
 
 namespace Spice.Flight;
 
-internal class SpiceFlightClient
+internal class SpiceFlightClient : IDisposable
 {
     private readonly FlightClient _flightClient;
+    private readonly GrpcChannel _channel;
+    private readonly HttpClient? _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
     private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent)
@@ -80,22 +82,30 @@ internal class SpiceFlightClient
                 });
 
         var options = GetGrpcChannelOptions(appId, apiKey, userAgent);
+        _httpClient = options.HttpClient;
 
-        _flightClient = new FlightClient(GrpcChannel.ForAddress(address, options));
+        _channel = GrpcChannel.ForAddress(address, options);
+        _flightClient = new FlightClient(_channel);
 
-        if (appId == null || apiKey == null)
+        if (appId != null && apiKey != null)
         {
-            return;
+            AuthenticateAsync().GetAwaiter().GetResult();
         }
+    }
 
+    private async Task AuthenticateAsync()
+    {
         var stream = _flightClient.Handshake();
 
-        stream.ResponseHeadersAsync.Wait();
+        var headers = await stream.ResponseHeadersAsync.ConfigureAwait(false);
+        var token = GetAuthToken(headers, stream.GetTrailers());
+        
+        if (token == null || _httpClient == null)
+        {
+            throw new SpiceException(SpiceStatus.FailedToAuthenticate, "Failed to authenticate");
+        }
 
-        var token = GetAuthToken(stream.ResponseHeadersAsync.Result, stream.GetTrailers());
-        if (token == null || options.HttpClient == null) throw new SpiceException(SpiceStatus.FailedToAuthenticate, "Failed to authenticate");
-
-        options.HttpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.Value);
+        _httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.Value);
     }
 
     internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)
@@ -116,5 +126,27 @@ internal class SpiceFlightClient
             var stream = _flightClient.GetStream(endpoint.Ticket);
             return stream.ResponseStream;
         });
+    }
+
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            // FlightClient doesn't implement IDisposable, but its underlying channel does
+            _channel?.Dispose();
+            _httpClient?.Dispose();
+        }
+
+        _disposed = true;
     }
 }

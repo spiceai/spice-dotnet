@@ -33,8 +33,14 @@ public class SpiceClientBuilder
     /// </summary>
     /// <param name="flightAddress">Flight address the client will query</param>
     /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    /// <exception cref="System.ArgumentException">Thrown when flightAddress is null or whitespace.</exception>
     public SpiceClientBuilder WithFlightAddress(string flightAddress)
     {
+#if NET8_0_OR_GREATER
+        ArgumentException.ThrowIfNullOrWhiteSpace(flightAddress);
+#else
+        ThrowHelper.ThrowIfNullOrWhiteSpace(flightAddress, nameof(flightAddress));
+#endif
         _spiceClient.FlightAddress = flightAddress;
         return this;
     }
@@ -47,10 +53,16 @@ public class SpiceClientBuilder
     /// <exception cref="System.ArgumentException">Thrown when the apiKey is in wrong format.</exception>
     public SpiceClientBuilder WithApiKey(string apiKey)
     {
+#if NET8_0_OR_GREATER
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+#else
+        ThrowHelper.ThrowIfNullOrWhiteSpace(apiKey, nameof(apiKey));
+#endif
+        
         var parts = apiKey.Split('|');
-        if (parts.Length != 2)
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
         {
-            throw new ArgumentException("apiKey is invalid");
+            throw new ArgumentException("apiKey must be in format 'appId|key'", nameof(apiKey));
         }
 
         _spiceClient.AppId = parts[0];
@@ -74,8 +86,14 @@ public class SpiceClientBuilder
     /// </summary>
     /// <param name="maxRetries">Max retries for request</param>
     /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    /// <exception cref="System.ArgumentOutOfRangeException">Thrown when maxRetries is negative.</exception>
     public SpiceClientBuilder WithMaxRetries(int maxRetries)
     {
+#if NET8_0_OR_GREATER
+        ArgumentOutOfRangeException.ThrowIfNegative(maxRetries);
+#else
+        ThrowHelper.ThrowIfNegative(maxRetries, nameof(maxRetries));
+#endif
         _spiceClient.MaxRetries = maxRetries;
         return this;
     }
@@ -85,8 +103,14 @@ public class SpiceClientBuilder
     /// </summary>
     /// <param name="userAgent">User agent string</param>
     /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    /// <exception cref="System.ArgumentException">Thrown when userAgent is null or whitespace.</exception>
     public SpiceClientBuilder WithUserAgent(string userAgent)
     {
+#if NET8_0_OR_GREATER
+        ArgumentException.ThrowIfNullOrWhiteSpace(userAgent);
+#else
+        ThrowHelper.ThrowIfNullOrWhiteSpace(userAgent, nameof(userAgent));
+#endif
         _spiceClient.UserAgent = userAgent;
         return this;
     }

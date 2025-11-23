@@ -12,21 +12,36 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v5
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '7.x' 
+          dotnet-version: | 
+            8.0.x
+            9.0.x
+            10.0.x
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build the project
+      - name: Build the project (all frameworks)
         run: dotnet build --configuration Release --no-restore
 
-      - name: Pack the project
-        run: dotnet pack --configuration Release --no-restore --output ./artifacts
+      - name: Build netstandard2.0
+        run: dotnet build Spice/Spice.csproj --framework netstandard2.0 --configuration Release --no-restore
+
+      - name: Build net8.0
+        run: dotnet build Spice/Spice.csproj --framework net8.0 --configuration Release --no-restore
+
+      - name: Build net9.0
+        run: dotnet build Spice/Spice.csproj --framework net9.0 --configuration Release --no-restore
+
+      - name: Build net10.0
+        run: dotnet build Spice/Spice.csproj --framework net10.0 --configuration Release --no-restore
+
+      - name: Pack the project (includes all frameworks)
+        run: dotnet pack Spice/Spice.csproj --configuration Release --no-build --output ./artifacts
 
       - name: Publish to NuGet
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

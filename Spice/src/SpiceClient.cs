@@ -26,7 +26,7 @@ using Spice.Flight;
 
 namespace Spice;
 
-public class SpiceClient
+public class SpiceClient : IDisposable
 {
     /// <summary>
     /// Gets or sets the application ID. This property is internal set and can be null.
@@ -71,8 +71,40 @@ public class SpiceClient
     /// <exception cref="Grpc.Core.RpcException">gRPC exception</exception>
     public Task<FlightClientRecordBatchStreamReader> Query(string sql)
     {
-        if (FlightClient == null) throw new Exception("FlightClient not initialized");
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
         return FlightClient.Query(sql);
+    }
+
+    private bool _disposed;
+
+    /// <summary>
+    /// Releases all resources used by the <see cref="SpiceClient"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="SpiceClient"/> and optionally releases the managed resources.
+    /// </summary>
+    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            FlightClient?.Dispose();
+        }
+
+        _disposed = true;
     }
 }
