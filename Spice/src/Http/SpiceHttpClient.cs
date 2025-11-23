@@ -49,7 +49,7 @@ internal class SpiceHttpClient : ISpiceHttpClient
         // Set authorization if credentials provided
         if (!string.IsNullOrEmpty(appId) && !string.IsNullOrEmpty(apiKey))
         {
-            _httpClient.DefaultRequestHeaders.Authorization = AuthHeaderBuilder.BasicAuth(appId, apiKey);
+            _httpClient.DefaultRequestHeaders.Authorization = AuthHeaderBuilder.BasicAuth(appId!, apiKey!);
         }
 
         // Set user agent
