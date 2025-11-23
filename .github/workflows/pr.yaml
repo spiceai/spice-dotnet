@@ -1,5 +1,8 @@
 name: pr
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: ["trunk"]
