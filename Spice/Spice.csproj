@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <LangVersion>11.0</LangVersion>
-        <PackageId>spiceai</PackageId>
+        <PackageId>SpiceAI</PackageId>
         <ImplicitUsings>enable</ImplicitUsings>
         <Version>0.2.0</Version>
         <Description>Spice.ai Dotnet SDK</Description>
