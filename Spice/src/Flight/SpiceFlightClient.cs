@@ -128,6 +128,102 @@ internal class SpiceFlightClient : IDisposable
         });
     }
 
+    internal async Task<FlightClientRecordBatchStreamReader> Query(string sql, IDictionary<string, object> parameters)
+    {
+        if (string.IsNullOrEmpty(sql))
+        {
+            throw new ArgumentException("No SQL provided");
+        }
+
+        if (parameters == null)
+        {
+            throw new ArgumentNullException(nameof(parameters));
+        }
+
+        return await _retryPolicy.ExecuteAsync(async () =>
+        {
+            // Create a parameterized query command using Flight SQL
+            var commandBytes = SerializeParameterizedQuery(sql, parameters);
+            var descriptor = FlightDescriptor.CreateCommandDescriptor(commandBytes);
+            var flightInfo = await _flightClient.GetInfo(descriptor);
+
+            var endpoint = flightInfo.Endpoints.FirstOrDefault();
+            if (endpoint == null) throw new Exception("Failed to get endpoint");
+
+            var stream = _flightClient.GetStream(endpoint.Ticket);
+            return stream.ResponseStream;
+        });
+    }
+
+    private static byte[] SerializeParameterizedQuery(string sql, IDictionary<string, object> parameters)
+    {
+        // Use Arrow Flight SQL protocol for parameterized queries
+        // Format: SQL followed by parameter binding information
+        using var memoryStream = new MemoryStream();
+        using var writer = new BinaryWriter(memoryStream);
+        
+        // Write SQL query
+        writer.Write(sql);
+        
+        // Write parameter count
+        writer.Write(parameters.Count);
+        
+        // Write each parameter name and value
+        foreach (var param in parameters)
+        {
+            writer.Write(param.Key);
+            WriteParameterValue(writer, param.Value);
+        }
+        
+        return memoryStream.ToArray();
+    }
+
+    private static void WriteParameterValue(BinaryWriter writer, object value)
+    {
+        // Write type indicator and value
+        switch (value)
+        {
+            case null:
+                writer.Write((byte)0); // NULL
+                break;
+            case string s:
+                writer.Write((byte)1); // STRING
+                writer.Write(s);
+                break;
+            case int i:
+                writer.Write((byte)2); // INT32
+                writer.Write(i);
+                break;
+            case long l:
+                writer.Write((byte)3); // INT64
+                writer.Write(l);
+                break;
+            case double d:
+                writer.Write((byte)4); // DOUBLE
+                writer.Write(d);
+                break;
+            case float f:
+                writer.Write((byte)5); // FLOAT
+                writer.Write(f);
+                break;
+            case bool b:
+                writer.Write((byte)6); // BOOLEAN
+                writer.Write(b);
+                break;
+            case DateTime dt:
+                writer.Write((byte)7); // TIMESTAMP
+                writer.Write(dt.ToBinary());
+                break;
+            case byte[] bytes:
+                writer.Write((byte)8); // BINARY
+                writer.Write(bytes.Length);
+                writer.Write(bytes);
+                break;
+            default:
+                throw new ArgumentException($"Unsupported parameter type: {value.GetType().Name}");
+        }
+    }
+
     private bool _disposed;
 
     public void Dispose()

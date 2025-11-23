@@ -85,25 +85,49 @@ public class FlightQueryTest
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
         var hasData = false;
+        var validReturnFlags = new HashSet<string> { "A", "N", "R" };
+        var validLineStatuses = new HashSet<string> { "F", "O" };
+        
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(10));
             
-            // Validate column types and data
+            // Validate column types and actual data values
             if (batch.Length > 0)
             {
                 hasData = true;
-                var returnFlagCol = batch.Column(0);
-                var lineStatusCol = batch.Column(1);
+                var returnFlagCol = batch.Column(0) as Apache.Arrow.StringArray;
+                var lineStatusCol = batch.Column(1) as Apache.Arrow.StringArray;
                 var sumQtyCol = batch.Column(2);
+                var sumBasePriceCol = batch.Column(3);
                 var countOrderCol = batch.Column(9);
                 
-                Assert.That(returnFlagCol, Is.Not.Null, "l_returnflag column should exist");
-                Assert.That(lineStatusCol, Is.Not.Null, "l_linestatus column should exist");
-                Assert.That(sumQtyCol, Is.Not.Null, "sum_qty column should exist");
-                Assert.That(countOrderCol, Is.Not.Null, "count_order column should exist");
+                Assert.That(returnFlagCol, Is.Not.Null, "l_returnflag should be string");
+                Assert.That(lineStatusCol, Is.Not.Null, "l_linestatus should be string");
+                
+                for (int i = 0; i < batch.Length; i++)
+                {
+                    // Validate return flags are valid values
+                    var returnFlag = returnFlagCol.GetString(i);
+                    Assert.That(validReturnFlags, Does.Contain(returnFlag), 
+                        $"Return flag should be A, N, or R, got {returnFlag}");
+                    
+                    // Validate line statuses are valid values
+                    var lineStatus = lineStatusCol.GetString(i);
+                    Assert.That(validLineStatuses, Does.Contain(lineStatus), 
+                        $"Line status should be F or O, got {lineStatus}");
+                    
+                    // Validate aggregated values are positive numbers
+                    var sumQty = GetNumericValue(sumQtyCol, i);
+                    var sumBasePrice = GetNumericValue(sumBasePriceCol, i);
+                    var countOrder = GetNumericValue(countOrderCol, i);
+                    
+                    Assert.That(sumQty, Is.GreaterThan(0), "sum_qty should be positive");
+                    Assert.That(sumBasePrice, Is.GreaterThan(0), "sum_base_price should be positive");
+                    Assert.That(countOrder, Is.GreaterThan(0), "count_order should be positive");
+                }
             }
         }
         Assert.That(hasData, Is.True, "Query should return at least one row");
@@ -158,19 +182,37 @@ public class FlightQueryTest
 
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
+        double? prevAcctBal = null;
+        
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(8));
             
-            // Validate column types and data
+            // Validate actual data values
             if (batch.Length > 0)
             {
                 var acctBalCol = batch.Column(0);
-                var nameCol = batch.Column(1);
-                Assert.That(acctBalCol, Is.Not.Null, "s_acctbal column should exist");
-                Assert.That(nameCol, Is.Not.Null, "s_name column should exist");
+                var nameCol = batch.Column(1) as Apache.Arrow.StringArray;
+                
+                Assert.That(nameCol, Is.Not.Null, "s_name should be string");
+                
+                for (int i = 0; i < batch.Length; i++)
+                {
+                    // Validate account balance exists and ordering (descending)
+                    var acctBal = GetNumericValue(acctBalCol, i);
+                    if (prevAcctBal.HasValue)
+                    {
+                        Assert.That(acctBal, Is.LessThanOrEqualTo(prevAcctBal.Value), 
+                            "Account balances should be ordered descending");
+                    }
+                    prevAcctBal = acctBal;
+                    
+                    // Validate supplier name is not empty
+                    var supplierName = nameCol.GetString(i);
+                    Assert.That(supplierName, Is.Not.Null.And.Not.Empty, "Supplier name should not be empty");
+                }
             }
         }
         Assert.That(totalRows, Is.LessThanOrEqualTo(100), "Q2 should return at most 100 rows");
@@ -209,19 +251,42 @@ public class FlightQueryTest
 
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
+        double? prevRevenue = null;
+        
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(4));
             
-            // Validate column types and data
+            // Validate actual data values
             if (batch.Length > 0)
             {
                 var orderKeyCol = batch.Column(0);
                 var revenueCol = batch.Column(1);
-                Assert.That(orderKeyCol, Is.Not.Null, "l_orderkey column should exist");
-                Assert.That(revenueCol, Is.Not.Null, "revenue column should exist");
+                var orderDateCol = batch.Column(2);
+                var shipPriorityCol = batch.Column(3);
+                
+                for (int i = 0; i < batch.Length; i++)
+                {
+                    // Validate order key is positive
+                    var orderKey = GetNumericValue(orderKeyCol, i);
+                    Assert.That(orderKey, Is.GreaterThan(0), "Order key should be positive");
+                    
+                    // Validate revenue is positive and ordered descending
+                    var revenue = GetNumericValue(revenueCol, i);
+                    Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
+                    if (prevRevenue.HasValue)
+                    {
+                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value), 
+                            "Revenue should be ordered descending");
+                    }
+                    prevRevenue = revenue;
+                    
+                    // Validate ship priority exists
+                    var shipPriority = GetNumericValue(shipPriorityCol, i);
+                    Assert.That(shipPriority, Is.GreaterThanOrEqualTo(0), "Ship priority should be non-negative");
+                }
             }
         }
         Assert.That(totalRows, Is.LessThanOrEqualTo(10), "Q3 should return at most 10 rows");
@@ -259,24 +324,41 @@ public class FlightQueryTest
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
         var hasData = false;
+        var validPriorities = new HashSet<string> { "1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW" };
+        var seenPriorities = new HashSet<string>();
+        
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(2));
             
-            // Validate column types and data
+            // Validate actual data values
             if (batch.Length > 0)
             {
                 hasData = true;
-                var priorityCol = batch.Column(0);
+                var priorityCol = batch.Column(0) as Apache.Arrow.StringArray;
                 var countCol = batch.Column(1);
-                Assert.That(priorityCol, Is.Not.Null, "o_orderpriority column should exist");
-                Assert.That(countCol, Is.Not.Null, "order_count column should exist");
+                
+                Assert.That(priorityCol, Is.Not.Null, "o_orderpriority should be string");
+                
+                for (int i = 0; i < batch.Length; i++)
+                {
+                    // Validate priority is one of the standard TPC-H priorities
+                    var priority = priorityCol.GetString(i);
+                    Assert.That(validPriorities, Does.Contain(priority), 
+                        $"Priority should be one of the standard values, got {priority}");
+                    seenPriorities.Add(priority);
+                    
+                    // Validate count is positive
+                    var count = GetNumericValue(countCol, i);
+                    Assert.That(count, Is.GreaterThan(0), "Order count should be positive");
+                }
             }
         }
         Assert.That(hasData, Is.True, "Q4 should return at least one row");
         Assert.That(totalRows, Is.EqualTo(5), "Q4 should return 5 priority levels");
+        Assert.That(seenPriorities.Count, Is.EqualTo(5), "Should see all 5 priority levels");
     }
 
     [Test]
@@ -313,23 +395,62 @@ public class FlightQueryTest
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
         var hasData = false;
+        var asianNations = new HashSet<string> { "INDIA", "INDONESIA", "JAPAN", "CHINA", "VIETNAM" };
+        var seenNations = new HashSet<string>();
+        double? prevRevenue = null;
+        
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(2));
             
-            // Validate column types and data
+            // Validate actual data values
             if (batch.Length > 0)
             {
                 hasData = true;
-                var nationCol = batch.Column(0);
+                var nationCol = batch.Column(0) as Apache.Arrow.StringArray;
                 var revenueCol = batch.Column(1);
-                Assert.That(nationCol, Is.Not.Null, "n_name column should exist");
-                Assert.That(revenueCol, Is.Not.Null, "revenue column should exist");
+                
+                Assert.That(nationCol, Is.Not.Null, "n_name should be string");
+                
+                for (int i = 0; i < batch.Length; i++)
+                {
+                    // Validate nation is an Asian nation
+                    var nation = nationCol.GetString(i);
+                    Assert.That(asianNations, Does.Contain(nation), 
+                        $"Nation should be one of the 5 Asian nations, got {nation}");
+                    seenNations.Add(nation);
+                    
+                    // Validate revenue is positive and ordered descending
+                    var revenue = GetNumericValue(revenueCol, i);
+                    Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
+                    if (prevRevenue.HasValue)
+                    {
+                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value), 
+                            "Revenue should be ordered descending");
+                    }
+                    prevRevenue = revenue;
+                }
             }
         }
         Assert.That(hasData, Is.True, "Q5 should return at least one row");
         Assert.That(totalRows, Is.EqualTo(5), "Q5 should return 5 Asian nations");
+        Assert.That(seenNations.Count, Is.EqualTo(5), "Should see all 5 Asian nations");
+        Assert.That(seenNations.Count, Is.EqualTo(5), "Should see all 5 Asian nations");
+    }
+
+    private static double GetNumericValue(Apache.Arrow.IArrowArray column, int index)
+    {
+        return column switch
+        {
+            Apache.Arrow.Int32Array int32Array => int32Array.GetValue(index) ?? 0,
+            Apache.Arrow.Int64Array int64Array => int64Array.GetValue(index) ?? 0,
+            Apache.Arrow.DoubleArray doubleArray => doubleArray.GetValue(index) ?? 0,
+            Apache.Arrow.FloatArray floatArray => floatArray.GetValue(index) ?? 0,
+            Apache.Arrow.Decimal128Array decimalArray => (double)(decimalArray.GetValue(index) ?? 0),
+            Apache.Arrow.Decimal256Array decimal256Array => (double)(decimal256Array.GetValue(index) ?? 0),
+            _ => throw new InvalidOperationException($"Unsupported numeric column type: {column.GetType().Name}")
+        };
     }
 }

@@ -1,6 +1,7 @@
 # Dotnet Spice SDK
 
 Dotnet SDK for Spice.ai.
+- Minimum supported version: .NET 8.0
 - Supports .NET Standard 2.0+, .NET 8.0, .NET 9.0, and .NET 10.0.
 - Asynchronous I/O.
 

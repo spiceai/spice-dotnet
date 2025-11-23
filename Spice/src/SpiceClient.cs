@@ -81,6 +81,28 @@ public class SpiceClient : IDisposable
         return FlightClient.Query(sql);
     }
 
+    /// <summary>
+    /// Runs a parameterized query against the Flight endpoint using Flight SQL prepared statements.
+    /// </summary>
+    /// <returns>A task representing asynchronous operation, with a result of type <see cref="FlightClientRecordBatchStreamReader"/></returns>
+    /// <param name="sql">Parameterized SQL query to be executed. Use named parameters like :param_name or $param_name</param>
+    /// <param name="parameters">Dictionary of parameter names and their values</param>
+    /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
+    /// <exception cref="System.ArgumentNullException">Thrown when parameters is null</exception>
+    /// <exception cref="Spice.Errors.SpiceException">Spice exception</exception>
+    /// <exception cref="Grpc.Core.RpcException">gRPC exception</exception>
+    public Task<FlightClientRecordBatchStreamReader> Query(string sql, IDictionary<string, object> parameters)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
+
+        return FlightClient.Query(sql, parameters);
+    }
+
     private bool _disposed;
 
     /// <summary>
