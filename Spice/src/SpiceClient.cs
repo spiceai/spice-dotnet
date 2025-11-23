@@ -23,6 +23,7 @@ SOFTWARE.
 using Apache.Arrow.Flight.Client;
 using Spice.Config;
 using Spice.Flight;
+using Spice.Http;
 
 namespace Spice;
 
@@ -49,16 +50,28 @@ public class SpiceClient : IDisposable
     public string FlightAddress { get; internal set; } = SpiceDefaultConfigLocal.FlightAddress;
 
     /// <summary>
+    /// Gets or sets the HTTP address. This property is internal set and defaults to local HTTP endpoint.
+    /// </summary>
+    public string HttpAddress { get; internal set; } = SpiceDefaultConfigLocal.HttpAddress;
+
+    /// <summary>
     /// Gets or sets the maximum number of retries. This property is internal set and defaults to 3.
     /// </summary>
     public int MaxRetries { get; internal set; } = 3;
 
+    /// <summary>
+    /// Gets or sets whether to use TLS for connections. This property is internal set and defaults to false for local connections.
+    /// </summary>
+    public bool UseTls { get; internal set; } = false;
+
     private SpiceFlightClient? FlightClient { get; set; }
+    private ISpiceHttpClient? HttpClient { get; set; }
 
 
     internal void Init()
     {
-        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent);
+        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
+        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent);
     }
 
     /// <summary>
@@ -82,25 +95,22 @@ public class SpiceClient : IDisposable
     }
 
     /// <summary>
-    /// Runs a parameterized query against the Flight endpoint using Flight SQL prepared statements.
+    /// Refreshes a dataset in the Spice runtime.
     /// </summary>
-    /// <returns>A task representing asynchronous operation, with a result of type <see cref="FlightClientRecordBatchStreamReader"/></returns>
-    /// <param name="sql">Parameterized SQL query to be executed. Use named parameters like :param_name or $param_name</param>
-    /// <param name="parameters">Dictionary of parameter names and their values</param>
-    /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
-    /// <exception cref="System.ArgumentNullException">Thrown when parameters is null</exception>
-    /// <exception cref="Spice.Errors.SpiceException">Spice exception</exception>
-    /// <exception cref="Grpc.Core.RpcException">gRPC exception</exception>
-    public Task<FlightClientRecordBatchStreamReader> Query(string sql, IDictionary<string, object> parameters)
+    /// <param name="datasetName">The name of the dataset to refresh</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task RefreshDatasetAsync(string datasetName)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
 #else
         if (_disposed) throw new ObjectDisposedException(GetType().FullName);
 #endif
-        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
-        return FlightClient.Query(sql, parameters);
+        return HttpClient.RefreshDatasetAsync(datasetName);
     }
 
     private bool _disposed;
@@ -125,6 +135,7 @@ public class SpiceClient : IDisposable
         if (disposing)
         {
             FlightClient?.Dispose();
+            HttpClient?.Dispose();
         }
 
         _disposed = true;

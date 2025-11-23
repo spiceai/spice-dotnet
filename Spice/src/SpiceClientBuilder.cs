@@ -46,6 +46,23 @@ public class SpiceClientBuilder
     }
 
     /// <summary>
+    /// Sets the client's HTTP address.
+    /// </summary>
+    /// <param name="httpAddress">HTTP address for runtime operations</param>
+    /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    /// <exception cref="System.ArgumentException">Thrown when httpAddress is null or whitespace.</exception>
+    public SpiceClientBuilder WithHttpAddress(string httpAddress)
+    {
+#if NET8_0_OR_GREATER
+        ArgumentException.ThrowIfNullOrWhiteSpace(httpAddress);
+#else
+        ThrowHelper.ThrowIfNullOrWhiteSpace(httpAddress, nameof(httpAddress));
+#endif
+        _spiceClient.HttpAddress = httpAddress;
+        return this;
+    }
+
+    /// <summary>
     /// Sets the client's Api Key.
     /// </summary>
     /// <param name="apiKey">The Spice Cloud api key</param>
@@ -72,12 +89,17 @@ public class SpiceClientBuilder
     }
 
     /// <summary>
-    /// Sets the client's flight address to default Spice Cloud address. 
+    /// Sets the client's flight address to default Spice Cloud address and configures authentication. 
     /// </summary>
+    /// <param name="apiKey">The Spice Cloud API key in format 'appId|key'</param>
     /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
-    public SpiceClientBuilder WithSpiceCloud()
+    /// <exception cref="System.ArgumentException">Thrown when the apiKey is in wrong format.</exception>
+    public SpiceClientBuilder WithSpiceCloud(string apiKey)
     {
+        WithApiKey(apiKey);
         _spiceClient.FlightAddress = SpiceDefaultConfigCloud.FlightAddress;
+        _spiceClient.HttpAddress = SpiceDefaultConfigCloud.HttpAddress;
+        _spiceClient.UseTls = true;
         return this;
     }
 
@@ -112,6 +134,17 @@ public class SpiceClientBuilder
         ThrowHelper.ThrowIfNullOrWhiteSpace(userAgent, nameof(userAgent));
 #endif
         _spiceClient.UserAgent = userAgent;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets whether to use TLS for connections.
+    /// </summary>
+    /// <param name="useTls">Whether to use TLS (true) or plaintext (false)</param>
+    /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    public SpiceClientBuilder WithTls(bool useTls = true)
+    {
+        _spiceClient.UseTls = useTls;
         return this;
     }
 

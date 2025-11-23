@@ -26,4 +26,7 @@ internal static class SpiceDefaultConfigLocal
 {
     public static readonly string FlightAddress =
         Environment.GetEnvironmentVariable("SPICE_LOCAL_FLIGHT_URL") ?? "http://localhost:50051";
+    
+    public static readonly string HttpAddress =
+        Environment.GetEnvironmentVariable("SPICE_LOCAL_HTTP_URL") ?? "http://localhost:8090";
 }

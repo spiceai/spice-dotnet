@@ -26,4 +26,7 @@ internal static class SpiceDefaultConfigCloud
 {
     public static readonly string FlightAddress =
         Environment.GetEnvironmentVariable("SPICE_FLIGHT_URL") ?? "https://flight.spiceai.io:443";
+    
+    public static readonly string HttpAddress =
+        Environment.GetEnvironmentVariable("SPICE_HTTP_URL") ?? "https://data.spiceai.io";
 }
