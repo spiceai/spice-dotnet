@@ -25,7 +25,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: | 
+            8.0.x
+            9.0.x
+            10.0.x
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
@@ -33,7 +36,7 @@ jobs:
       - name: Test
         env:
           API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
-        run: dotnet test --no-build --verbosity normal --configuration Release
+        run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
 
   build_and_test_windows_mac:
     name: Build and test ${{matrix.os}} - .NET ${{matrix.dotnet-version}}
@@ -43,6 +46,12 @@ jobs:
       matrix:
         include:
           - os: windows-2022
+            dotnet-version: '8.0.x'
+          - os: windows-2022
+            dotnet-version: '9.0.x'
+          - os: windows-2022
+            dotnet-version: '10.0.x'
+          - os: windows-latest
             dotnet-version: '8.0.x'
           - os: windows-latest
             dotnet-version: '9.0.x'
@@ -58,7 +67,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: | 
+            8.0.x
+            9.0.x
+            10.0.x
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
@@ -66,4 +78,4 @@ jobs:
       - name: Test
         env:
           API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
-        run: dotnet test --no-build --verbosity normal --configuration Release
+        run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
