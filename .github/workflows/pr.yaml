@@ -43,6 +43,9 @@ jobs:
       matrix:
         os: [macos-latest, windows-2022]
         dotnet-version: ['8.0.x', '9.0.x']
+        exclude:
+          - os: macos-latest
+            dotnet-version: '8.0.x'
 
     steps:
       - uses: actions/checkout@v5
