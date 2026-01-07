@@ -8,7 +8,7 @@ on:
     branches: ["trunk"]
   pull_request:
     branches: ["trunk"]
-  
+
   workflow_dispatch:
 
 jobs:
@@ -18,14 +18,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dotnet-version: ['8.0.x', '9.0.x', '10.0.x']
+        dotnet-version: ["8.0.x", "9.0.x", "10.0.x"]
 
     steps:
       - uses: actions/checkout@v5
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: | 
+          dotnet-version: |
             8.0.x
             9.0.x
             10.0.x
@@ -35,7 +35,7 @@ jobs:
         run: dotnet build --no-restore --configuration Release
       - name: Test
         env:
-          API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
+          SCP_SPICEAI_TPCH_API_KEY: ${{ secrets.SCP_SPICEAI_TPCH_API_KEY }}
         run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
 
   build_and_test_windows_mac:
@@ -46,28 +46,28 @@ jobs:
       matrix:
         include:
           - os: windows-2022
-            dotnet-version: '8.0.x'
+            dotnet-version: "8.0.x"
           - os: windows-2022
-            dotnet-version: '9.0.x'
+            dotnet-version: "9.0.x"
           - os: windows-2022
-            dotnet-version: '10.0.x'
+            dotnet-version: "10.0.x"
           - os: windows-latest
-            dotnet-version: '8.0.x'
+            dotnet-version: "8.0.x"
           - os: windows-latest
-            dotnet-version: '9.0.x'
+            dotnet-version: "9.0.x"
           - os: windows-latest
-            dotnet-version: '10.0.x'
+            dotnet-version: "10.0.x"
           - os: macos-latest
-            dotnet-version: '9.0.x'
+            dotnet-version: "9.0.x"
           - os: macos-latest
-            dotnet-version: '10.0.x'
+            dotnet-version: "10.0.x"
 
     steps:
       - uses: actions/checkout@v5
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: | 
+          dotnet-version: |
             8.0.x
             9.0.x
             10.0.x
@@ -78,5 +78,5 @@ jobs:
       - name: Test
         continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
         env:
-          API_KEY: ${{ secrets.SPICE_CLOUD_API_KEY }}
+          SCP_SPICEAI_TPCH_API_KEY: ${{ secrets.SCP_SPICEAI_TPCH_API_KEY }}
         run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}

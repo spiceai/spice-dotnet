@@ -52,7 +52,8 @@ public class FlightQueryTest
         {
             if (ApiKey == null)
             {
-                throw new InvalidOperationException("No API key provided. Set SCP_SPICEAI_TPCH_API_KEY environment variable.");
+                Assert.Ignore("Skipping test: SCP_SPICEAI_TPCH_API_KEY environment variable not set.");
+                return;
             }
             _spiceClient = new SpiceClientBuilder()
                 .WithSpiceCloud(ApiKey)
