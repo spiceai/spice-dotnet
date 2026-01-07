@@ -64,11 +64,11 @@ public class SpiceClient : IDisposable
     /// <summary>
     /// Gets or sets whether to use TLS for connections. This property is internal set and defaults to false for local connections.
     /// </summary>
-    public bool UseTls { get; internal set; } = false;
+    public bool UseTls { get; internal set; }
 
     private SpiceFlightClient? FlightClient { get; set; }
     private SpiceAdbcClient? AdbcClient { get; set; }
-    private ISpiceHttpClient? HttpClient { get; set; }
+    private SpiceHttpClient? HttpClient { get; set; }
 
 
     internal void Init()

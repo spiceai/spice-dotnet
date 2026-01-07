@@ -193,7 +193,7 @@ public class TypeInferenceTest
     [Test]
     public void Test_InferArrowType_EmptyByteArray_ReturnsBinaryType()
     {
-        var result = InferArrowType(new byte[0]);
+        var result = InferArrowType(Array.Empty<byte>());
         Assert.That(result, Is.TypeOf<BinaryType>());
     }
 

@@ -109,8 +109,8 @@ public class ParamEdgeCasesTest
     [Test]
     public void Test_Param_Binary_EmptyArray()
     {
-        var param = Param.Binary(new byte[0]);
-        Assert.That(param.Value, Is.EqualTo(new byte[0]));
+        var param = Param.Binary(Array.Empty<byte>());
+        Assert.That(param.Value, Is.EqualTo(Array.Empty<byte>()));
         Assert.That(param.Type, Is.TypeOf<BinaryType>());
     }
 

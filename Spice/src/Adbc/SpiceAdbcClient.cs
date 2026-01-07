@@ -93,15 +93,23 @@ internal sealed class SpiceAdbcClient : IDisposable
                 !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
                 // Use TLS for cloud addresses or when explicitly configured
-                uri = _useTls ? "grpc+tls://" + uri : "grpc://" + uri;
+                uri = _useTls ? string.Concat("grpc+tls://", uri) : string.Concat("grpc://", uri);
             }
             else if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
             {
-                uri = "grpc://" + uri.Substring("http://".Length);
+#if NET6_0_OR_GREATER
+                uri = string.Concat("grpc://", uri.AsSpan("http://".Length));
+#else
+                uri = string.Concat("grpc://", uri.Substring("http://".Length));
+#endif
             }
             else if (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                uri = "grpc+tls://" + uri.Substring("https://".Length);
+#if NET6_0_OR_GREATER
+                uri = string.Concat("grpc+tls://", uri.AsSpan("https://".Length));
+#else
+                uri = string.Concat("grpc+tls://", uri.Substring("https://".Length));
+#endif
             }
 
             // Build driver parameters
@@ -113,8 +121,8 @@ internal sealed class SpiceAdbcClient : IDisposable
             // Add authentication if available
             if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
             {
-                parameters["username"] = _appId;
-                parameters["password"] = _apiKey;
+                parameters["username"] = _appId!;
+                parameters["password"] = _apiKey!;
             }
 
             // Add user agent header
@@ -166,7 +174,7 @@ internal sealed class SpiceAdbcClient : IDisposable
     /// <summary>
     /// Creates a RecordBatch containing the parameter values.
     /// </summary>
-    private RecordBatch CreateParameterBatch(object?[] parameters)
+    private static RecordBatch CreateParameterBatch(object?[] parameters)
     {
         var numParams = parameters.Length;
         var fields = new Field[numParams];
@@ -329,7 +337,7 @@ internal sealed class SpiceAdbcClient : IDisposable
 
     private static IArrowArray CreateBinaryArray(byte[]? value) => ArrowArrayBuilder.BuildBinary(value);
 
-    private static IArrowArray CreateDate32Array(object? value)
+    private static Date32Array CreateDate32Array(object? value)
     {
         var builder = new Date32Array.Builder();
         if (value == null)
@@ -358,7 +366,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateDate64Array(object? value)
+    private static Date64Array CreateDate64Array(object? value)
     {
         var builder = new Date64Array.Builder();
         if (value == null)
@@ -381,7 +389,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateTime32Array(object? value, TimeUnit unit)
+    private static Time32Array CreateTime32Array(object? value, TimeUnit unit)
     {
         var builder = new Time32Array.Builder(new Time32Type(unit));
         if (value is int intValue)
@@ -395,7 +403,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateTime64Array(object? value, TimeUnit unit)
+    private static Time64Array CreateTime64Array(object? value, TimeUnit unit)
     {
         var builder = new Time64Array.Builder(new Time64Type(unit));
         if (value is long longValue)
@@ -421,7 +429,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateTimestampArray(object? value, TimestampType type)
+    private static TimestampArray CreateTimestampArray(object? value, TimestampType type)
     {
         var builder = new TimestampArray.Builder(type);
         if (value == null)
@@ -437,7 +445,7 @@ internal sealed class SpiceAdbcClient : IDisposable
                 TimeUnit.Millisecond => longValue * TimeSpan.TicksPerMillisecond,
                 TimeUnit.Microsecond => longValue * 10,
                 TimeUnit.Nanosecond => longValue / 100,
-                _ => throw new ArgumentOutOfRangeException()
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type.Unit, "Unsupported timestamp time unit")
             };
             var dto = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(ticks);
             builder.Append(dto);
@@ -457,7 +465,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateDecimal128Array(object? value, Decimal128Type type)
+    private static Decimal128Array CreateDecimal128Array(object? value, Decimal128Type type)
     {
         var builder = new Decimal128Array.Builder(type);
         if (value is decimal dec)
@@ -471,7 +479,7 @@ internal sealed class SpiceAdbcClient : IDisposable
         return builder.Build();
     }
 
-    private static IArrowArray CreateDecimal256Array(object? value, Decimal256Type type)
+    private static Decimal256Array CreateDecimal256Array(object? value, Decimal256Type type)
     {
         var builder = new Decimal256Array.Builder(type);
         if (value is decimal dec)

@@ -26,6 +26,8 @@ namespace SpiceTest;
 
 public class FlightQueryTest
 {
+    private static readonly string[] ValidNations = { "FRANCE", "GERMANY" };
+    
     private SpiceClient _spiceClient = null!;
     private string? ApiKey { get; set; }
     private bool UseLocalhost { get; set; }
@@ -50,7 +52,7 @@ public class FlightQueryTest
         {
             if (ApiKey == null)
             {
-                throw new Exception("No API_KEY provided");
+                throw new InvalidOperationException("No API_KEY provided");
             }
             _spiceClient = new SpiceClientBuilder()
                 .WithSpiceCloud(ApiKey)
@@ -531,8 +533,8 @@ public class FlightQueryTest
                     var revenue = GetNumericValue(revenueCol, i);
                     
                     // Validate nations are FRANCE or GERMANY
-                    Assert.That(new[] { "FRANCE", "GERMANY" }, Does.Contain(suppNation));
-                    Assert.That(new[] { "FRANCE", "GERMANY" }, Does.Contain(custNation));
+                    Assert.That(ValidNations, Does.Contain(suppNation));
+                    Assert.That(ValidNations, Does.Contain(custNation));
                     Assert.That(suppNation, Is.Not.EqualTo(custNation), "Supplier and customer nations should be different");
                     
                     // Validate year is 1995 or 1996

@@ -147,10 +147,13 @@ internal class SpiceFlightClient : IDisposable
             var descriptor = FlightDescriptor.CreateCommandDescriptor(sql);
             var flightInfo = await _flightClient.GetInfo(descriptor);
 
-            var endpoint = flightInfo.Endpoints.FirstOrDefault();
-            if (endpoint == null) throw new Exception("Failed to get endpoint");
+            var endpoints = flightInfo.Endpoints;
+            if (endpoints.Count == 0)
+            {
+                throw new InvalidOperationException("Failed to get endpoint from flight info");
+            }
 
-            var stream = _flightClient.GetStream(endpoint.Ticket);
+            var stream = _flightClient.GetStream(endpoints[0].Ticket);
             return stream.ResponseStream;
         });
     }
