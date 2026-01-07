@@ -57,6 +57,72 @@ var data = await client.Query(
     parameters);
 ```
 
+##### Parameterized Queries with Positional Placeholders
+
+For more control over parameter types, use `QueryWithParams` with positional placeholders (`$1`, `$2`, etc.). This uses the ADBC protocol and supports explicit type specification:
+
+```csharp
+using Spice;
+using Spice.Params;
+
+using var client = new SpiceClientBuilder().Build();
+
+// Basic usage with type inference
+var data = await client.QueryWithParams(
+    "SELECT * FROM products WHERE id = $1 AND price >= $2",
+    42,           // Inferred as Int32
+    10.50         // Inferred as Double
+);
+
+// Read the results as Arrow data
+while (await data!.ReadNextRecordBatchAsync() is { } batch)
+{
+    // Process batch...
+}
+```
+
+##### Explicit Type Control with the Param Class
+
+Use the `Param` class for explicit control over Arrow data types:
+
+```csharp
+using Spice;
+using Spice.Params;
+
+using var client = new SpiceClientBuilder().Build();
+
+// Explicitly typed parameters
+var data = await client.QueryWithParams(
+    "SELECT * FROM orders WHERE customer_id = $1 AND order_date >= $2 AND total > $3",
+    Param.Int64(12345),                           // Explicit Int64
+    Param.Date32(new DateTime(2024, 1, 1)),       // Date without time
+    Param.Decimal128(100.00m, 10, 2)              // Decimal with precision/scale
+);
+
+// Supported Param types:
+// - Integers: Param.Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64
+// - Floating point: Param.Float, Double
+// - Text/Binary: Param.String, Binary
+// - Boolean: Param.Boolean
+// - Date/Time: Param.Date32, Date64, Time32, Time64, Timestamp
+// - Duration: Param.DurationSeconds, DurationMilliseconds, DurationMicroseconds, DurationNanoseconds
+// - Decimal: Param.Decimal128, Decimal256
+// - Null: Param.Null
+```
+
+##### Mixed Parameters
+
+You can mix inferred and explicit types in the same query:
+
+```csharp
+var data = await client.QueryWithParams(
+    "SELECT * FROM users WHERE name = $1 AND age > $2 AND verified = $3",
+    "John",                    // Inferred as String
+    Param.Int16(18),           // Explicit Int16
+    true                       // Inferred as Boolean
+);
+```
+
 #### Refresh Dataset
 
 Trigger a refresh of an accelerated dataset:

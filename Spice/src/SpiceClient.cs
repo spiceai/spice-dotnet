@@ -21,6 +21,8 @@ SOFTWARE.
 */
 
 using Apache.Arrow.Flight.Client;
+using Apache.Arrow.Ipc;
+using Spice.Adbc;
 using Spice.Config;
 using Spice.Flight;
 using Spice.Http;
@@ -65,12 +67,14 @@ public class SpiceClient : IDisposable
     public bool UseTls { get; internal set; } = false;
 
     private SpiceFlightClient? FlightClient { get; set; }
+    private SpiceAdbcClient? AdbcClient { get; set; }
     private ISpiceHttpClient? HttpClient { get; set; }
 
 
     internal void Init()
     {
         FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
+        AdbcClient = new SpiceAdbcClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
         HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent);
     }
 
@@ -92,6 +96,50 @@ public class SpiceClient : IDisposable
         if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
         return FlightClient.Query(sql);
+    }
+
+    /// <summary>
+    /// Executes a parameterized SQL query using ADBC (Arrow Database Connectivity).
+    /// This is the recommended method for queries with user input to prevent SQL injection.
+    /// Parameters should use positional placeholders ($1, $2, etc.) in the SQL query.
+    /// 
+    /// <para>
+    /// Parameters can be:
+    /// <list type="bullet">
+    /// <item><description>Simple .NET values (int, string, bool, etc.) - type will be inferred</description></item>
+    /// <item><description>Param instances with explicit type annotation using Param factory methods</description></item>
+    /// </list>
+    /// </para>
+    /// 
+    /// <example>
+    /// <code>
+    /// // With automatic type inference
+    /// var result = await client.QueryWithParams(
+    ///     "SELECT * FROM table WHERE id = $1 AND name = $2",
+    ///     123, "test");
+    /// 
+    /// // With explicit types
+    /// var result = await client.QueryWithParams(
+    ///     "SELECT * FROM table WHERE id = $1 AND amount = $2",
+    ///     Param.Int32(123), Param.Double(99.99));
+    /// </code>
+    /// </example>
+    /// </summary>
+    /// <param name="sql">SQL query with positional parameter placeholders ($1, $2, etc.)</param>
+    /// <param name="parameters">The parameter values (can be plain values or Param instances)</param>
+    /// <returns>A task representing the asynchronous operation, with an IArrowArrayStream result</returns>
+    /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    public Task<IArrowArrayStream?> QueryWithParams(string sql, params object?[] parameters)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (AdbcClient == null) throw new InvalidOperationException("AdbcClient not initialized");
+
+        return AdbcClient.QueryWithParamsAsync(sql, parameters);
     }
 
     /// <summary>
@@ -135,6 +183,7 @@ public class SpiceClient : IDisposable
         if (disposing)
         {
             FlightClient?.Dispose();
+            AdbcClient?.Dispose();
             HttpClient?.Dispose();
         }
 

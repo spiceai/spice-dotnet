@@ -25,10 +25,9 @@ using Apache.Arrow.Flight;
 using Apache.Arrow.Flight.Client;
 using Grpc.Core;
 using Grpc.Net.Client;
-using Polly;
 using Polly.Retry;
 using Spice.Auth;
-using Spice.Config;
+using Spice.Common;
 using Spice.Errors;
 
 namespace Spice.Flight;
@@ -92,9 +91,8 @@ internal class SpiceFlightClient : IDisposable
             }
         };
 
-        // Prepend the user-supplied user agent (if any) with the Spice user agent
-        var uaString = string.IsNullOrEmpty(userAgent) ? SpiceUserAgent.agent() : $"{userAgent} {SpiceUserAgent.agent()}";
-        options.HttpClient.DefaultRequestHeaders.Add("User-Agent", uaString);
+        // Add user agent header using common helper
+        options.HttpClient.DefaultRequestHeaders.Add("User-Agent", UserAgentHelper.BuildUserAgent(userAgent));
 
         return options;
     }
@@ -106,16 +104,9 @@ internal class SpiceFlightClient : IDisposable
 
     internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls)
     {
-        _retryPolicy = Policy.Handle<RpcException>(ex =>
-                ex.Status.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.Aborted
-                    or StatusCode.Internal or StatusCode.Unknown)
-            .WaitAndRetryAsync(retryCount: maxRetries,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(retryAttempt * 1.5),
-                onRetry: (_, timespan, retryAttempt, _) =>
-                {
-                    Console.WriteLine(
-                        $"Request failed. Waiting {timespan} before next retry. Retry attempt {retryAttempt}");
-                });
+        _retryPolicy = RetryPolicyFactory.CreateRpcRetryPolicy(
+            maxRetries,
+            (ex, ts, attempt) => RetryPolicyFactory.LogRetry("Flight", ex, ts, attempt));
 
         var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls);
         _httpClient = options.HttpClient;
