@@ -74,13 +74,13 @@ internal sealed class SpiceAdbcClient : IDisposable
     private static bool ShouldRetryAdbcException(AdbcException ex)
     {
         // Don't retry if the driver doesn't support a feature
-        if (ex.Message.Contains("does not support", StringComparison.OrdinalIgnoreCase))
+        if (ex.Message.IndexOf("does not support", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return false;
         }
 
         // Don't retry if it's a NotImplemented error
-        if (ex.Message.Contains("NotImplemented", StringComparison.OrdinalIgnoreCase))
+        if (ex.Message.IndexOf("NotImplemented", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return false;
         }
