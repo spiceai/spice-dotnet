@@ -22,7 +22,7 @@ SOFTWARE.
 
 using Apache.Arrow;
 using Apache.Arrow.Adbc;
-using Apache.Arrow.Adbc.Drivers.FlightSql;
+using Apache.Arrow.Adbc.Drivers.Interop.FlightSql;
 using Apache.Arrow.Ipc;
 using Apache.Arrow.Types;
 using Polly.Retry;
@@ -60,9 +60,32 @@ internal sealed class SpiceAdbcClient : IDisposable
         _userAgent = userAgent;
         _useTls = useTls;
 
+        // Create retry policy that excludes permanent failures like "Statement does not support Prepare"
         _retryPolicy = RetryPolicyFactory.CreateGeneralRetryPolicy<AdbcException>(
             maxRetries,
+            additionalPredicate: ShouldRetryAdbcException,
             onRetry: (ex, ts, attempt) => RetryPolicyFactory.LogRetry("ADBC", ex, ts, attempt));
+    }
+
+    /// <summary>
+    /// Determines if an ADBC exception should be retried.
+    /// Returns false for permanent failures that should not be retried.
+    /// </summary>
+    private static bool ShouldRetryAdbcException(AdbcException ex)
+    {
+        // Don't retry if the driver doesn't support a feature
+        if (ex.Message.Contains("does not support", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Don't retry if it's a NotImplemented error
+        if (ex.Message.Contains("NotImplemented", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -83,37 +106,24 @@ internal sealed class SpiceAdbcClient : IDisposable
                 return;
             }
 
-            // Format the URI for ADBC FlightSQL driver
+            // Format the URI for ADBC FlightSQL Go driver
+            // The Go-based driver handles grpc/grpc+tls schemes natively
             var uri = _flightAddress;
-            
-            // Ensure proper scheme
+
+            // Ensure proper scheme if not already present
             if (!uri.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase) &&
                 !uri.StartsWith("grpc+tls://", StringComparison.OrdinalIgnoreCase) &&
+                !uri.StartsWith("grpc+tcp://", StringComparison.OrdinalIgnoreCase) &&
                 !uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                 !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                // Use TLS for cloud addresses or when explicitly configured
+                // No scheme provided - add grpc or grpc+tls based on TLS setting
                 uri = _useTls ? string.Concat("grpc+tls://", uri) : string.Concat("grpc://", uri);
             }
-            else if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            {
-#if NET6_0_OR_GREATER
-                uri = string.Concat("grpc://", uri.AsSpan("http://".Length));
-#else
-                uri = string.Concat("grpc://", uri.Substring("http://".Length));
-#endif
-            }
-            else if (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-#if NET6_0_OR_GREATER
-                uri = string.Concat("grpc+tls://", uri.AsSpan("https://".Length));
-#else
-                uri = string.Concat("grpc+tls://", uri.Substring("https://".Length));
-#endif
-            }
 
-            // Build driver parameters
-            var parameters = new Dictionary<string, string>
+            // Build database parameters for the Go driver
+            // The Go driver uses "uri" as the connection parameter
+            var databaseParams = new Dictionary<string, string>
             {
                 { "uri", uri }
             };
@@ -121,16 +131,16 @@ internal sealed class SpiceAdbcClient : IDisposable
             // Add authentication if available
             if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
             {
-                parameters["username"] = _appId!;
-                parameters["password"] = _apiKey!;
+                databaseParams["username"] = _appId!;
+                databaseParams["password"] = _apiKey!;
             }
 
-            // Add user agent header
-            parameters["adbc.flight.sql.rpc.call_header.user-agent"] = UserAgentHelper.BuildUserAgent(_userAgent);
+            // Add user agent header using the Go driver's header prefix
+            databaseParams["adbc.flight.sql.rpc.call_header.user-agent"] = UserAgentHelper.BuildUserAgent(_userAgent);
 
-            // Create the driver and database
-            var driver = new FlightSqlDriver();
-            _database = driver.Open(parameters);
+            // Create the Go-based interop driver and database
+            var driver = FlightSqlDriverLoader.LoadDriver();
+            _database = driver.Open(databaseParams);
             _connection = _database.Connect(new Dictionary<string, string>());
         }
     }

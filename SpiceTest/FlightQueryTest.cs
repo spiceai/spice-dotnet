@@ -35,7 +35,7 @@ public class FlightQueryTest
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
-        ApiKey = Environment.GetEnvironmentVariable("API_KEY");
+        ApiKey = Environment.GetEnvironmentVariable("SCP_SPICEAI_TPCH_API_KEY");
         UseLocalhost = Environment.GetEnvironmentVariable("USE_LOCALHOST") == "true";
     }
 
@@ -52,7 +52,7 @@ public class FlightQueryTest
         {
             if (ApiKey == null)
             {
-                throw new InvalidOperationException("No API_KEY provided");
+                throw new InvalidOperationException("No API key provided. Set SCP_SPICEAI_TPCH_API_KEY environment variable.");
             }
             _spiceClient = new SpiceClientBuilder()
                 .WithSpiceCloud(ApiKey)

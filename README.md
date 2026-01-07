@@ -61,6 +61,11 @@ var data = await client.Query(
 
 For more control over parameter types, use `QueryWithParams` with positional placeholders (`$1`, `$2`, etc.). This uses the ADBC protocol and supports explicit type specification:
 
+> **Note**: The `QueryWithParams` method requires the ADBC FlightSQL driver to support prepared statements.
+> The pure C# driver (`Apache.Arrow.Adbc.Drivers.FlightSql`) currently does not implement `Prepare()`.
+> For full parameterized query support, the Go-based interop driver (`Apache.Arrow.Adbc.Drivers.Interop.FlightSql`)
+> is required. See the [Apache ADBC documentation](https://arrow.apache.org/adbc/) for more details.
+
 ```csharp
 using Spice;
 using Spice.Params;
