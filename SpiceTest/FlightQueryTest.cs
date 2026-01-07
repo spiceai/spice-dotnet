@@ -26,6 +26,8 @@ namespace SpiceTest;
 
 public class FlightQueryTest
 {
+    private static readonly string[] ValidNations = { "FRANCE", "GERMANY" };
+    
     private SpiceClient _spiceClient = null!;
     private string? ApiKey { get; set; }
     private bool UseLocalhost { get; set; }
@@ -33,7 +35,7 @@ public class FlightQueryTest
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
-        ApiKey = Environment.GetEnvironmentVariable("API_KEY");
+        ApiKey = Environment.GetEnvironmentVariable("SCP_SPICEAI_TPCH_API_KEY");
         UseLocalhost = Environment.GetEnvironmentVariable("USE_LOCALHOST") == "true";
     }
 
@@ -50,7 +52,8 @@ public class FlightQueryTest
         {
             if (ApiKey == null)
             {
-                throw new Exception("No API_KEY provided");
+                Assert.Ignore("Skipping test: SCP_SPICEAI_TPCH_API_KEY environment variable not set.");
+                return;
             }
             _spiceClient = new SpiceClientBuilder()
                 .WithSpiceCloud(ApiKey)
@@ -531,8 +534,8 @@ public class FlightQueryTest
                     var revenue = GetNumericValue(revenueCol, i);
                     
                     // Validate nations are FRANCE or GERMANY
-                    Assert.That(new[] { "FRANCE", "GERMANY" }, Does.Contain(suppNation));
-                    Assert.That(new[] { "FRANCE", "GERMANY" }, Does.Contain(custNation));
+                    Assert.That(ValidNations, Does.Contain(suppNation));
+                    Assert.That(ValidNations, Does.Contain(custNation));
                     Assert.That(suppNation, Is.Not.EqualTo(custNation), "Supplier and customer nations should be different");
                     
                     // Validate year is 1995 or 1996
