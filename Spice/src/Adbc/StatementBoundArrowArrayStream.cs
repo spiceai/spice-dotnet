@@ -53,7 +53,18 @@ internal sealed class StatementBoundArrowArrayStream : IArrowArrayStream
     }
 
     /// <inheritdoc/>
-    public Schema Schema => _innerStream.Schema;
+    public Schema Schema
+    {
+        get
+        {
+#if NET8_0_OR_GREATER
+            ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+            if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+            return _innerStream.Schema;
+        }
+    }
 
     /// <inheritdoc/>
     public ValueTask<RecordBatch?> ReadNextRecordBatchAsync(CancellationToken cancellationToken = default)
