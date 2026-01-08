@@ -184,22 +184,34 @@ internal sealed class SpiceAdbcClient : IDisposable
         {
             InitializeIfNeeded();
 
-            using var statement = _connection!.CreateStatement();
-            statement.SqlQuery = sql;
-
-            // Prepare the statement
-            statement.Prepare();
-
-            // Bind parameters if provided
-            if (parameters.Length > 0)
+            var statement = _connection!.CreateStatement();
+            try
             {
-                var parameterBatch = CreateParameterBatch(parameters);
-                statement.Bind(parameterBatch, parameterBatch.Schema);
-            }
+                statement.SqlQuery = sql;
 
-            // Execute the query
-            var result = statement.ExecuteQuery();
-            return Task.FromResult(result.Stream);
+                // Prepare the statement
+                statement.Prepare();
+
+                // Bind parameters if provided
+                if (parameters.Length > 0)
+                {
+                    var parameterBatch = CreateParameterBatch(parameters);
+                    statement.Bind(parameterBatch, parameterBatch.Schema);
+                }
+
+                // Execute the query
+                var result = statement.ExecuteQuery();
+
+                // Wrap the stream to keep the statement alive for the stream's lifetime
+                var wrappedStream = new StatementBoundArrowArrayStream(result.Stream!, statement);
+                return Task.FromResult<IArrowArrayStream?>(wrappedStream);
+            }
+            catch
+            {
+                // If anything fails before we wrap the stream, dispose the statement
+                statement.Dispose();
+                throw;
+            }
         });
     }
 

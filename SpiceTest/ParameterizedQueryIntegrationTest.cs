@@ -131,7 +131,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_SingleIntParameter()
     {
         // Query customers by customer key
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT c_custkey, c_name, c_nationkey FROM spice.tpch.customer WHERE c_custkey = $1",
             1);
 
@@ -154,7 +154,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_SingleStringParameter()
     {
         // Query nations by name
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT n_nationkey, n_name, n_regionkey FROM spice.tpch.nation WHERE n_name = $1",
             "FRANCE");
 
@@ -177,7 +177,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_MultipleParameters()
     {
         // Query parts by size range and type pattern
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT p_partkey, p_name, p_size, p_type
               FROM spice.tpch.part
               WHERE p_size >= $1 AND p_size <= $2
@@ -209,7 +209,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_ThreeParameters()
     {
         // Query lineitems by ship date range and quantity threshold
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT l_orderkey, l_linenumber, l_quantity, l_shipdate
               FROM spice.tpch.lineitem
               WHERE l_shipdate >= $1
@@ -244,7 +244,7 @@ public class ParameterizedQueryIntegrationTest
     [Test]
     public async Task Test_QueryWithParams_ExplicitInt32Type()
     {
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT c_custkey, c_name FROM spice.tpch.customer WHERE c_custkey = $1",
             Param.Int32(5));
 
@@ -265,7 +265,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_ExplicitDoubleType()
     {
         // Query parts by retail price threshold
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT p_partkey, p_name, p_retailprice
               FROM spice.tpch.part
               WHERE p_retailprice > $1
@@ -296,7 +296,7 @@ public class ParameterizedQueryIntegrationTest
     [Test]
     public async Task Test_QueryWithParams_ExplicitStringType()
     {
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT r_regionkey, r_name FROM spice.tpch.region WHERE r_name = $1",
             Param.String("EUROPE"));
 
@@ -317,7 +317,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_MixedExplicitAndInferred()
     {
         // Mix explicit Param types with inferred types
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT l_orderkey, l_linenumber, l_quantity, l_discount
               FROM spice.tpch.lineitem
               WHERE l_quantity >= $1
@@ -343,7 +343,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_TpchQ6Style_RevenueByDiscount()
     {
         // TPC-H Q6 style query with parameterized date range and discount
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT SUM(l_extendedprice * l_discount) as revenue
               FROM spice.tpch.lineitem
               WHERE l_shipdate >= $1
@@ -375,7 +375,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_JoinWithParameters()
     {
         // Join query with parameterized nation
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT c.c_custkey, c.c_name, n.n_name
               FROM spice.tpch.customer c
               JOIN spice.tpch.nation n ON c.c_nationkey = n.n_nationkey
@@ -407,7 +407,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_AggregationWithParameters()
     {
         // Aggregation query with parameterized grouping
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT l_returnflag, l_linestatus,
                      SUM(l_quantity) as total_qty,
                      COUNT(*) as count
@@ -433,7 +433,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_SubqueryWithParameters()
     {
         // Subquery with parameters
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT o_orderkey, o_custkey, o_totalprice
               FROM spice.tpch.orders
               WHERE o_custkey IN (
@@ -472,7 +472,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_LargeIntegerValue()
     {
         // Large order key value
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT o_orderkey, o_custkey FROM spice.tpch.orders WHERE o_orderkey = $1",
             Param.Int64(6000000L));
 
@@ -491,7 +491,7 @@ public class ParameterizedQueryIntegrationTest
     [Test]
     public async Task Test_QueryWithParams_ZeroValue()
     {
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT l_orderkey, l_linenumber, l_discount
               FROM spice.tpch.lineitem
               WHERE l_discount = $1
@@ -514,7 +514,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_EmptyStringParameter()
     {
         // Empty string should work but likely not match anything
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT n_nationkey, n_name FROM spice.tpch.nation WHERE n_name = $1",
             "");
 
@@ -534,7 +534,7 @@ public class ParameterizedQueryIntegrationTest
     public async Task Test_QueryWithParams_NegativeNumber()
     {
         // Query with negative value (should not match any positive keys)
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT c_custkey, c_name FROM spice.tpch.customer WHERE c_custkey > $1 LIMIT 5",
             -100);
 
@@ -553,7 +553,7 @@ public class ParameterizedQueryIntegrationTest
     [Test]
     public async Task Test_QueryWithParams_VerySmallDouble()
     {
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             @"SELECT l_orderkey, l_discount
               FROM spice.tpch.lineitem
               WHERE l_discount >= $1
@@ -581,7 +581,7 @@ public class ParameterizedQueryIntegrationTest
         // Execute the same query multiple times with different parameters
         for (var key = 1; key <= 5; key++)
         {
-            var result = await QueryWithParamsOrSkip(sql, key);
+            using var result = await QueryWithParamsOrSkip(sql, key);
             Assert.That(result, Is.Not.Null, $"Query for key {key} should succeed");
 
             var batches = new List<RecordBatch>();
@@ -697,7 +697,7 @@ public class ParameterizedQueryIntegrationTest
         // Malicious string that would cause issues with string concatenation
         var maliciousInput = "FRANCE'; DROP TABLE nation; --";
 
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT n_nationkey, n_name FROM spice.tpch.nation WHERE n_name = $1",
             maliciousInput);
 
@@ -713,7 +713,7 @@ public class ParameterizedQueryIntegrationTest
         Assert.That(batches.Sum(b => b.Length), Is.EqualTo(0));
 
         // Verify nation table still exists
-        var verifyResult = await QueryWithParamsOrSkip(
+        using var verifyResult = await QueryWithParamsOrSkip(
             "SELECT COUNT(*) as cnt FROM spice.tpch.nation WHERE n_name = $1",
             "FRANCE");
 
@@ -733,14 +733,19 @@ public class ParameterizedQueryIntegrationTest
         // String with quotes that would break naive concatenation
         var inputWithQuotes = "O'BRIEN";
 
-        var result = await QueryWithParamsOrSkip(
+        using var result = await QueryWithParamsOrSkip(
             "SELECT c_custkey, c_name FROM spice.tpch.customer WHERE c_name LIKE $1 LIMIT 5",
             $"%{inputWithQuotes}%");
 
         Assert.That(result, Is.Not.Null);
 
         // Query should execute without SQL syntax errors
-        await ConsumeStream(result!);
+        // Note: ConsumeStream will dispose the stream via using, but we already have using here
+        // so just consume without the helper
+        while (await result!.ReadNextRecordBatchAsync() is { })
+        {
+            // Just consume the stream
+        }
         Assert.Pass("Query with quotes in parameter executed successfully");
     }
 
@@ -754,19 +759,25 @@ public class ParameterizedQueryIntegrationTest
 
     private static async Task<int> CountRows(Apache.Arrow.Ipc.IArrowArrayStream stream)
     {
-        var count = 0;
-        while (await stream.ReadNextRecordBatchAsync() is { } batch)
+        using (stream)
         {
-            count += batch.Length;
+            var count = 0;
+            while (await stream.ReadNextRecordBatchAsync() is { } batch)
+            {
+                count += batch.Length;
+            }
+            return count;
         }
-        return count;
     }
 
     private static async Task ConsumeStream(Apache.Arrow.Ipc.IArrowArrayStream stream)
     {
-        while (await stream.ReadNextRecordBatchAsync() is { })
+        using (stream)
         {
-            // Just consume the stream
+            while (await stream.ReadNextRecordBatchAsync() is { })
+            {
+                // Just consume the stream
+            }
         }
     }
 
