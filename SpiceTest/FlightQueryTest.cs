@@ -27,7 +27,7 @@ namespace SpiceTest;
 public class FlightQueryTest
 {
     private static readonly string[] ValidNations = { "FRANCE", "GERMANY" };
-    
+
     private SpiceClient _spiceClient = null!;
     private string? ApiKey { get; set; }
     private bool UseLocalhost { get; set; }
@@ -56,7 +56,10 @@ public class FlightQueryTest
                 return;
             }
             _spiceClient = new SpiceClientBuilder()
-                .WithSpiceCloud(ApiKey)
+                .WithApiKey(ApiKey)
+                .WithHttpAddress("https://us-east-1-prod-aws-data.spiceai.io")
+                .WithFlightAddress("https://us-east-1-prod-aws-flight.spiceai.io:443")
+                .WithTls(true)
                 .Build();
         }
     }
@@ -100,13 +103,13 @@ public class FlightQueryTest
         var hasData = false;
         var validReturnFlags = new HashSet<string> { "A", "N", "R" };
         var validLineStatuses = new HashSet<string> { "F", "O" };
-        
+
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(10));
-            
+
             // Validate column types and actual data values
             if (batch.Length > 0)
             {
@@ -116,27 +119,27 @@ public class FlightQueryTest
                 var sumQtyCol = batch.Column(2);
                 var sumBasePriceCol = batch.Column(3);
                 var countOrderCol = batch.Column(9);
-                
+
                 Assert.That(returnFlagCol, Is.Not.Null, "l_returnflag should be string");
                 Assert.That(lineStatusCol, Is.Not.Null, "l_linestatus should be string");
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     // Validate return flags are valid values
                     var returnFlag = GetStringValue(returnFlagCol, i);
-                    Assert.That(validReturnFlags, Does.Contain(returnFlag), 
+                    Assert.That(validReturnFlags, Does.Contain(returnFlag),
                         $"Return flag should be A, N, or R, got {returnFlag}");
-                    
+
                     // Validate line statuses are valid values
                     var lineStatus = GetStringValue(lineStatusCol, i);
-                    Assert.That(validLineStatuses, Does.Contain(lineStatus), 
+                    Assert.That(validLineStatuses, Does.Contain(lineStatus),
                         $"Line status should be F or O, got {lineStatus}");
-                    
+
                     // Validate aggregated values are positive numbers
                     var sumQty = GetNumericValue(sumQtyCol, i);
                     var sumBasePrice = GetNumericValue(sumBasePriceCol, i);
                     var countOrder = GetNumericValue(countOrderCol, i);
-                    
+
                     Assert.That(sumQty, Is.GreaterThan(0), "sum_qty should be positive");
                     Assert.That(sumBasePrice, Is.GreaterThan(0), "sum_base_price should be positive");
                     Assert.That(countOrder, Is.GreaterThan(0), "count_order should be positive");
@@ -196,30 +199,30 @@ public class FlightQueryTest
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
         double? prevAcctBal = null;
-        
+
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(8));
-            
+
             // Validate actual data values
             if (batch.Length > 0)
             {
                 var acctBalCol = batch.Column(0);
                 var nameCol = batch.Column(1);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     // Validate account balance exists and ordering (descending)
                     var acctBal = GetNumericValue(acctBalCol, i);
                     if (prevAcctBal.HasValue)
                     {
-                        Assert.That(acctBal, Is.LessThanOrEqualTo(prevAcctBal.Value), 
+                        Assert.That(acctBal, Is.LessThanOrEqualTo(prevAcctBal.Value),
                             "Account balances should be ordered descending");
                     }
                     prevAcctBal = acctBal;
-                    
+
                     // Validate supplier name is not empty
                     var supplierName = GetStringValue(nameCol, i);
                     Assert.That(supplierName, Is.Not.Null.And.Not.Empty, "Supplier name should not be empty");
@@ -263,13 +266,13 @@ public class FlightQueryTest
         var enumerator = result.GetAsyncEnumerator();
         var totalRows = 0;
         double? prevRevenue = null;
-        
+
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(4));
-            
+
             // Validate actual data values
             if (batch.Length > 0)
             {
@@ -277,23 +280,23 @@ public class FlightQueryTest
                 var revenueCol = batch.Column(1);
                 var orderDateCol = batch.Column(2);
                 var shipPriorityCol = batch.Column(3);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     // Validate order key is positive
                     var orderKey = GetNumericValue(orderKeyCol, i);
                     Assert.That(orderKey, Is.GreaterThan(0), "Order key should be positive");
-                    
+
                     // Validate revenue is positive and ordered descending
                     var revenue = GetNumericValue(revenueCol, i);
                     Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
                     if (prevRevenue.HasValue)
                     {
-                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value), 
+                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value),
                             "Revenue should be ordered descending");
                     }
                     prevRevenue = revenue;
-                    
+
                     // Validate ship priority exists
                     var shipPriority = GetNumericValue(shipPriorityCol, i);
                     Assert.That(shipPriority, Is.GreaterThanOrEqualTo(0), "Ship priority should be non-negative");
@@ -337,28 +340,28 @@ public class FlightQueryTest
         var hasData = false;
         var validPriorities = new HashSet<string> { "1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW" };
         var seenPriorities = new HashSet<string>();
-        
+
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(2));
-            
+
             // Validate actual data values
             if (batch.Length > 0)
             {
                 hasData = true;
                 var priorityCol = batch.Column(0);
                 var countCol = batch.Column(1);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     // Validate priority is one of the standard TPC-H priorities
                     var priority = GetStringValue(priorityCol, i);
-                    Assert.That(validPriorities, Does.Contain(priority), 
+                    Assert.That(validPriorities, Does.Contain(priority),
                         $"Priority should be one of the standard values, got {priority}");
                     seenPriorities.Add(priority);
-                    
+
                     // Validate count is positive
                     var count = GetNumericValue(countCol, i);
                     Assert.That(count, Is.GreaterThan(0), "Order count should be positive");
@@ -407,34 +410,34 @@ public class FlightQueryTest
         var asianNations = new HashSet<string> { "INDIA", "INDONESIA", "JAPAN", "CHINA", "VIETNAM" };
         var seenNations = new HashSet<string>();
         double? prevRevenue = null;
-        
+
         while (await enumerator.MoveNextAsync())
         {
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(2));
-            
+
             // Validate actual data values
             if (batch.Length > 0)
             {
                 hasData = true;
                 var nationCol = batch.Column(0);
                 var revenueCol = batch.Column(1);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     // Validate nation is an Asian nation
                     var nation = GetStringValue(nationCol, i);
-                    Assert.That(asianNations, Does.Contain(nation), 
+                    Assert.That(asianNations, Does.Contain(nation),
                         $"Nation should be one of the 5 Asian nations, got {nation}");
                     seenNations.Add(nation);
-                    
+
                     // Validate revenue is positive and ordered descending
                     var revenue = GetNumericValue(revenueCol, i);
                     Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
                     if (prevRevenue.HasValue)
                     {
-                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value), 
+                        Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue.Value),
                             "Revenue should be ordered descending");
                     }
                     prevRevenue = revenue;
@@ -467,13 +470,13 @@ public class FlightQueryTest
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(1));
-            
+
             if (batch.Length > 0)
             {
                 hasData = true;
                 var revenueCol = batch.Column(0);
                 var revenue = GetNumericValue(revenueCol, 0);
-                
+
                 // Validate revenue is in expected range for TPC-H scale factor 1
                 Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
                 Assert.That(revenue, Is.GreaterThan(100_000_000), "Revenue should be significant for SF=1");
@@ -517,7 +520,7 @@ public class FlightQueryTest
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(4));
-            
+
             if (batch.Length > 0)
             {
                 hasData = true;
@@ -525,22 +528,22 @@ public class FlightQueryTest
                 var custNationCol = batch.Column(1);
                 var yearCol = batch.Column(2);
                 var revenueCol = batch.Column(3);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     var suppNation = GetStringValue(suppNationCol, i);
                     var custNation = GetStringValue(custNationCol, i);
                     var year = GetNumericValue(yearCol, i);
                     var revenue = GetNumericValue(revenueCol, i);
-                    
+
                     // Validate nations are FRANCE or GERMANY
                     Assert.That(ValidNations, Does.Contain(suppNation));
                     Assert.That(ValidNations, Does.Contain(custNation));
                     Assert.That(suppNation, Is.Not.EqualTo(custNation), "Supplier and customer nations should be different");
-                    
+
                     // Validate year is 1995 or 1996
                     Assert.That(year, Is.InRange(1995, 1996));
-                    
+
                     // Validate revenue is positive
                     Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
                 }
@@ -555,7 +558,7 @@ public class FlightQueryTest
     {
         // TPC-H Q8: National Market Share Query
         var result = await _spiceClient.Query(@"
-            SELECT o_year, 
+            SELECT o_year,
                    SUM(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / SUM(volume) AS mkt_share
             FROM (
                 SELECT EXTRACT(YEAR FROM o_orderdate) AS o_year,
@@ -585,21 +588,21 @@ public class FlightQueryTest
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(2));
-            
+
             if (batch.Length > 0)
             {
                 hasData = true;
                 var yearCol = batch.Column(0);
                 var mktShareCol = batch.Column(1);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     var year = GetNumericValue(yearCol, i);
                     var mktShare = GetNumericValue(mktShareCol, i);
-                    
+
                     // Validate year is 1995 or 1996
                     Assert.That(year, Is.InRange(1995, 1996));
-                    
+
                     // Validate market share is a valid percentage (0-1)
                     Assert.That(mktShare, Is.GreaterThanOrEqualTo(0), "Market share should be >= 0");
                     Assert.That(mktShare, Is.LessThanOrEqualTo(1), "Market share should be <= 1");
@@ -642,31 +645,31 @@ public class FlightQueryTest
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(3));
-            
+
             if (batch.Length > 0)
             {
                 hasData = true;
                 var nationCol = batch.Column(0);
                 var yearCol = batch.Column(1);
                 var profitCol = batch.Column(2);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     var nation = GetStringValue(nationCol, i);
                     var year = GetNumericValue(yearCol, i);
                     var profit = GetNumericValue(profitCol, i);
-                    
+
                     // Validate nation is not empty
                     Assert.That(nation, Is.Not.Empty, "Nation should not be empty");
-                    
+
                     // Validate year is reasonable (TPC-H data typically spans 1992-1998)
                     Assert.That(year, Is.InRange(1992, 1998));
-                    
+
                     // Within same nation, years should be descending
                     if (nation == prevNation && i > 0)
                     {
                         var prevYear = GetNumericValue(yearCol, i - 1);
-                        Assert.That(year, Is.LessThanOrEqualTo(prevYear), 
+                        Assert.That(year, Is.LessThanOrEqualTo(prevYear),
                             "Years should be descending within same nation");
                     }
                     prevNation = nation;
@@ -705,7 +708,7 @@ public class FlightQueryTest
             var batch = enumerator.Current;
             totalRows += batch.Length;
             Assert.That(batch.ColumnCount, Is.EqualTo(8));
-            
+
             if (batch.Length > 0)
             {
                 hasData = true;
@@ -717,7 +720,7 @@ public class FlightQueryTest
                 var addressCol = batch.Column(5);
                 var phoneCol = batch.Column(6);
                 var commentCol = batch.Column(7);
-                
+
                 for (int i = 0; i < batch.Length; i++)
                 {
                     var custkey = GetNumericValue(custkeyCol, i);
@@ -728,27 +731,27 @@ public class FlightQueryTest
                     var address = GetStringValue(addressCol, i);
                     var phone = GetStringValue(phoneCol, i);
                     var comment = GetStringValue(commentCol, i);
-                    
+
                     // Validate custkey is positive
                     Assert.That(custkey, Is.GreaterThan(0), "Customer key should be positive");
-                    
+
                     // Validate customer name is not empty
                     Assert.That(name, Is.Not.Empty, "Customer name should not be empty");
-                    
+
                     // Validate revenue is positive
                     Assert.That(revenue, Is.GreaterThan(0), "Revenue should be positive");
-                    
+
                     // Validate revenue is ordered descending
-                    Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue), 
+                    Assert.That(revenue, Is.LessThanOrEqualTo(prevRevenue),
                         "Revenue should be ordered descending");
                     prevRevenue = revenue;
-                    
+
                     // Validate nation is not empty
                     Assert.That(nation, Is.Not.Empty, "Nation should not be empty");
-                    
+
                     // Validate address is not empty
                     Assert.That(address, Is.Not.Empty, "Address should not be empty");
-                    
+
                     // Validate phone is not empty
                     Assert.That(phone, Is.Not.Empty, "Phone should not be empty");
                 }
