@@ -20,9 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+using System.Runtime.InteropServices;
 using Apache.Arrow;
 using Apache.Arrow.Adbc;
-using Apache.Arrow.Adbc.Drivers.Interop.FlightSql;
 using Apache.Arrow.Ipc;
 using Apache.Arrow.Types;
 using Polly.Retry;
@@ -114,23 +114,36 @@ internal sealed class SpiceAdbcClient : IDisposable
                 return;
             }
 
-            // Format the URI for ADBC FlightSQL Go driver
-            // The Go-based driver handles grpc/grpc+tls schemes natively
+            // Format the URI for ADBC FlightSQL driver
+            // The driver expects grpc:// or grpc+tls:// schemes
             var uri = _flightAddress;
 
-            // Ensure proper scheme if not already present
-            if (!uri.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("grpc+tls://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("grpc+tcp://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            // Convert http/https schemes to grpc/grpc+tls
+            if (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+#if NETSTANDARD2_0
+                uri = "grpc+tls://" + uri.Substring(8);
+#else
+                uri = string.Concat("grpc+tls://", uri.AsSpan(8));
+#endif
+            }
+            else if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+#if NETSTANDARD2_0
+                uri = "grpc://" + uri.Substring(7);
+#else
+                uri = string.Concat("grpc://", uri.AsSpan(7));
+#endif
+            }
+            else if (!uri.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase) &&
+                     !uri.StartsWith("grpc+tls://", StringComparison.OrdinalIgnoreCase) &&
+                     !uri.StartsWith("grpc+tcp://", StringComparison.OrdinalIgnoreCase))
             {
                 // No scheme provided - add grpc or grpc+tls based on TLS setting
                 uri = _useTls ? string.Concat("grpc+tls://", uri) : string.Concat("grpc://", uri);
             }
 
-            // Build database parameters for the Go driver
-            // The Go driver uses "uri" as the connection parameter
+            // Build database parameters for the ADBC FlightSQL driver
             var databaseParams = new Dictionary<string, string>
             {
                 { "uri", uri }
@@ -143,11 +156,12 @@ internal sealed class SpiceAdbcClient : IDisposable
                 databaseParams["password"] = _apiKey!;
             }
 
-            // Add user agent header using the Go driver's header prefix
+            // Add user agent header
             databaseParams["adbc.flight.sql.rpc.call_header.user-agent"] = UserAgentHelper.BuildUserAgent(_userAgent);
 
-            // Create the Go-based interop driver and database
-            var driver = FlightSqlDriverLoader.LoadDriver();
+            // Load the ADBC FlightSQL driver from the application base directory
+            var driverPath = ResolveNativeDriverPath();
+            var driver = AdbcDriverLoader.LoadDriver(driverPath, "AdbcDriverFlightsqlInit");
             _database = driver.Open(databaseParams);
             _connection = _database.Connect(new Dictionary<string, string>());
         }
@@ -170,22 +184,34 @@ internal sealed class SpiceAdbcClient : IDisposable
         {
             InitializeIfNeeded();
 
-            using var statement = _connection!.CreateStatement();
-            statement.SqlQuery = sql;
-
-            // Prepare the statement
-            statement.Prepare();
-
-            // Bind parameters if provided
-            if (parameters.Length > 0)
+            var statement = _connection!.CreateStatement();
+            try
             {
-                var parameterBatch = CreateParameterBatch(parameters);
-                statement.Bind(parameterBatch, parameterBatch.Schema);
-            }
+                statement.SqlQuery = sql;
 
-            // Execute the query
-            var result = statement.ExecuteQuery();
-            return Task.FromResult(result.Stream);
+                // Prepare the statement
+                statement.Prepare();
+
+                // Bind parameters if provided
+                if (parameters.Length > 0)
+                {
+                    var parameterBatch = CreateParameterBatch(parameters);
+                    statement.Bind(parameterBatch, parameterBatch.Schema);
+                }
+
+                // Execute the query
+                var result = statement.ExecuteQuery();
+
+                // Wrap the stream to keep the statement alive for the stream's lifetime
+                var wrappedStream = new StatementBoundArrowArrayStream(result.Stream!, statement);
+                return Task.FromResult<IArrowArrayStream?>(wrappedStream);
+            }
+            catch
+            {
+                // If anything fails before we wrap the stream, dispose the statement
+                statement.Dispose();
+                throw;
+            }
         });
     }
 
@@ -512,6 +538,61 @@ internal sealed class SpiceAdbcClient : IDisposable
     }
 
     // ============ Disposal ============
+
+    /// <summary>
+    /// Resolves the path to the native ADBC FlightSQL driver based on the current platform.
+    /// Uses standard .NET conventions: AppContext.BaseDirectory and runtimes/{rid}/native/ layout.
+    /// </summary>
+    private static string ResolveNativeDriverPath()
+    {
+        var rid = GetRuntimeIdentifier();
+        var driverFileName = GetDriverFileName();
+        var driverPath = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", driverFileName);
+
+        if (!File.Exists(driverPath))
+        {
+            throw new FileNotFoundException(
+                $"Could not find native ADBC FlightSQL driver at {driverPath}. " +
+                $"Ensure the SpiceAI NuGet package is properly installed.",
+                driverPath);
+        }
+
+        return driverPath;
+    }
+
+    /// <summary>
+    /// Gets the runtime identifier for the current platform.
+    /// </summary>
+    private static string GetRuntimeIdentifier()
+    {
+        var arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return $"win-{arch}";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            return $"linux-{arch}";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return $"osx-{arch}";
+
+        throw new PlatformNotSupportedException(
+            $"Unsupported platform: {RuntimeInformation.OSDescription}");
+    }
+
+    /// <summary>
+    /// Gets the platform-specific driver filename.
+    /// </summary>
+    private static string GetDriverFileName()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return "libadbc_driver_flightsql.dll";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            return "libadbc_driver_flightsql.so";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return "libadbc_driver_flightsql.dylib";
+
+        throw new PlatformNotSupportedException(
+            $"Unsupported platform: {RuntimeInformation.OSDescription}");
+    }
 
     private bool _disposed;
 

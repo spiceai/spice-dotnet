@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <PackageId>SpiceAI</PackageId>
@@ -28,6 +28,18 @@
         <None Include="..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
+    <!-- 
+        Include native ADBC FlightSQL driver for osx-arm64.
+        This platform is not included in the upstream Apache.Arrow.Adbc.Drivers.Interop.FlightSql NuGet package.
+        NuGet/MSBuild automatically copies the correct RID-specific binary to output at build time.
+        
+        Native library source: Apache Arrow ADBC 1.9.0
+        SHA-256 (wheel): edee43183625acb2fd2e2b8331f07ac516b6958ef1f27663f6308334db7f7272
+    -->
+    <ItemGroup>
+        <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" Link="runtimes\%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
     <ItemGroup>
         <PackageReference Include="Apache.Arrow" Version="22.1.0" />
         <PackageReference Include="Apache.Arrow.Adbc" Version="0.21.0" />
@@ -42,6 +54,5 @@
             <_Parameter1>SpiceTest</_Parameter1>
         </AssemblyAttribute>
     </ItemGroup>
-
 
 </Project>
