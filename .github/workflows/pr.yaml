@@ -76,7 +76,6 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
       - name: Test
-        continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
         env:
           SCP_SPICEAI_TPCH_API_KEY: ${{ secrets.SCP_SPICEAI_TPCH_API_KEY }}
         run: dotnet test --no-build --verbosity normal --configuration Release --framework ${{ matrix.dotnet-version == '8.0.x' && 'net8.0' || matrix.dotnet-version == '9.0.x' && 'net9.0' || 'net10.0' }}
