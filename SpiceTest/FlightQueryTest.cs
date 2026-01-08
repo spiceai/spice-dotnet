@@ -56,10 +56,7 @@ public class FlightQueryTest
                 return;
             }
             _spiceClient = new SpiceClientBuilder()
-                .WithApiKey(ApiKey)
-                .WithHttpAddress("https://us-east-1-prod-aws-data.spiceai.io")
-                .WithFlightAddress("https://us-east-1-prod-aws-flight.spiceai.io:443")
-                .WithTls(true)
+                .WithSpiceCloud(ApiKey)
                 .Build();
         }
     }
