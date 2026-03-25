@@ -56,7 +56,12 @@ internal class SpiceFlightClient : IDisposable
                 // Configure HttpHandler for TLS on macOS (.NET 8.0+)
                 var handler = new SocketsHttpHandler
                 {
-                    EnableMultipleHttp2Connections = true
+                    EnableMultipleHttp2Connections = true,
+                    // Force periodic connection recycling to trigger DNS re-resolution.
+                    // Without this, HTTP/2 connections are kept alive indefinitely and
+                    // the client can get stuck on stale IPs when backend targets change
+                    // (e.g. AWS ALB target rotation).
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                 };
                 options.HttpHandler = handler;
             }
@@ -74,7 +79,12 @@ internal class SpiceFlightClient : IDisposable
         {
             messageHandler = new SocketsHttpHandler
             {
-                EnableMultipleHttp2Connections = true
+                EnableMultipleHttp2Connections = true,
+                // Force periodic connection recycling to trigger DNS re-resolution.
+                // Without this, HTTP/2 connections are kept alive indefinitely and
+                // the client can get stuck on stale IPs when backend targets change
+                // (e.g. AWS ALB target rotation).
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             };
         }
         else
