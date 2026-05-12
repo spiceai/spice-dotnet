@@ -35,7 +35,8 @@ internal class SpiceHttpClient : ISpiceHttpClient
     private readonly string _httpAddress;
     private bool _disposed;
 
-    internal SpiceHttpClient(string httpAddress, string? appId, string? apiKey, string? userAgent)
+    internal SpiceHttpClient(string httpAddress, string? appId, string? apiKey, string? userAgent,
+        string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
     {
 #if NET8_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(httpAddress);
@@ -44,7 +45,42 @@ internal class SpiceHttpClient : ISpiceHttpClient
 #endif
 
         _httpAddress = httpAddress;
-        _httpClient = new HttpClient();
+
+#if NET8_0_OR_GREATER
+        if (tlsClientCertFile != null || tlsRootCertFile != null)
+        {
+            var handler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            };
+            if (tlsClientCertFile != null && tlsClientKeyFile != null)
+            {
+                var clientCert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPemFile(
+                    tlsClientCertFile, tlsClientKeyFile);
+                handler.SslOptions.ClientCertificates =
+                    new System.Security.Cryptography.X509Certificates.X509Certificate2Collection { clientCert };
+            }
+            if (tlsRootCertFile != null)
+            {
+#pragma warning disable SYSLIB0057
+                var caCert = new System.Security.Cryptography.X509Certificates.X509Certificate2(tlsRootCertFile);
+#pragma warning restore SYSLIB0057
+                handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
+                {
+                    if (errors == System.Net.Security.SslPolicyErrors.None) return true;
+                    if (cert == null || chain == null) return false;
+                    chain.ChainPolicy.TrustMode = System.Security.Cryptography.X509Certificates.X509ChainTrustMode.CustomRootTrust;
+                    chain.ChainPolicy.CustomTrustStore.Add(caCert);
+                    return chain.Build(new System.Security.Cryptography.X509Certificates.X509Certificate2(cert));
+                };
+            }
+            _httpClient = new HttpClient(handler);
+        }
+        else
+#endif
+        {
+            _httpClient = new HttpClient();
+        }
 
         // Set authorization if credentials provided
         if (!string.IsNullOrEmpty(appId) && !string.IsNullOrEmpty(apiKey))

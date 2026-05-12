@@ -149,6 +149,32 @@ public class SpiceClientBuilder
     }
 
     /// <summary>
+    /// Sets the paths to PEM-encoded client certificate and key files for mTLS.
+    /// </summary>
+    /// <param name="certFile">Path to the client certificate PEM file.</param>
+    /// <param name="keyFile">Path to the client private key PEM file.</param>
+    /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    public SpiceClientBuilder WithTlsClientCertificate(string certFile, string keyFile)
+    {
+        _spiceClient.TlsClientCertFile = certFile;
+        _spiceClient.TlsClientKeyFile = keyFile;
+        _spiceClient.UseTls = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the path to a PEM-encoded CA certificate file for server verification.
+    /// </summary>
+    /// <param name="caFile">Path to the CA certificate PEM file.</param>
+    /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
+    public SpiceClientBuilder WithTlsRootCertificate(string caFile)
+    {
+        _spiceClient.TlsRootCertFile = caFile;
+        _spiceClient.UseTls = true;
+        return this;
+    }
+
+    /// <summary>
     /// Initiates <see cref="SpiceClient" /> with provided parameters.
     /// </summary>
     /// <returns>The current instance of <see cref="SpiceClient"/> for method chaining.</returns>
