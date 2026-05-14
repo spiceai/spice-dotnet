@@ -66,6 +66,24 @@ public class SpiceClient : IDisposable
     /// </summary>
     public bool UseTls { get; internal set; }
 
+    /// <summary>
+    /// Gets or sets the path to a PEM-encoded client certificate file for mTLS.
+    /// Must be used together with <see cref="TlsClientKeyFile"/>.
+    /// </summary>
+    public string? TlsClientCertFile { get; internal set; }
+
+    /// <summary>
+    /// Gets or sets the path to a PEM-encoded client private key file for mTLS.
+    /// Must be used together with <see cref="TlsClientCertFile"/>.
+    /// </summary>
+    public string? TlsClientKeyFile { get; internal set; }
+
+    /// <summary>
+    /// Gets or sets the path to a PEM-encoded CA certificate file for server verification.
+    /// When set, this CA is used instead of the system certificate store.
+    /// </summary>
+    public string? TlsRootCertFile { get; internal set; }
+
     private SpiceFlightClient? FlightClient { get; set; }
     private SpiceAdbcClient? AdbcClient { get; set; }
     private SpiceHttpClient? HttpClient { get; set; }
@@ -73,9 +91,19 @@ public class SpiceClient : IDisposable
 
     internal void Init()
     {
-        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
+        // Validate that client cert and key are either both set or both unset
+        bool hasCert = !string.IsNullOrEmpty(TlsClientCertFile);
+        bool hasKey = !string.IsNullOrEmpty(TlsClientKeyFile);
+        if (hasCert != hasKey)
+        {
+            var missing = hasCert ? nameof(TlsClientKeyFile) : nameof(TlsClientCertFile);
+            throw new InvalidOperationException(
+                $"Both {nameof(TlsClientCertFile)} and {nameof(TlsClientKeyFile)} must be provided together for mTLS. {missing} is missing.");
+        }
+
+        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile);
         AdbcClient = new SpiceAdbcClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
-        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent);
+        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile);
     }
 
     /// <summary>

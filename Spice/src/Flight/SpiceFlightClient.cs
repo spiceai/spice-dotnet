@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 using System.Net.Http.Headers;
+using System.Security.Cryptography.X509Certificates;
 using Apache.Arrow.Flight;
 using Apache.Arrow.Flight.Client;
 using Grpc.Core;
@@ -39,7 +40,7 @@ internal class SpiceFlightClient : IDisposable
     private readonly HttpClient? _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls)
+    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
     {
         var options = new GrpcChannelOptions();
 
@@ -57,12 +58,27 @@ internal class SpiceFlightClient : IDisposable
                 var handler = new SocketsHttpHandler
                 {
                     EnableMultipleHttp2Connections = true,
-                    // Force periodic connection recycling to trigger DNS re-resolution.
-                    // Without this, HTTP/2 connections are kept alive indefinitely and
-                    // the client can get stuck on stale IPs when backend targets change
-                    // (e.g. AWS ALB target rotation).
                     PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                 };
+                if (tlsClientCertFile != null && tlsClientKeyFile != null)
+                {
+                    var clientCert = X509Certificate2.CreateFromPemFile(tlsClientCertFile, tlsClientKeyFile);
+                    handler.SslOptions.ClientCertificates = new X509Certificate2Collection { clientCert };
+                }
+                if (tlsRootCertFile != null)
+                {
+                    #pragma warning disable SYSLIB0057
+                    var caCert = new X509Certificate2(tlsRootCertFile);
+#pragma warning restore SYSLIB0057
+                    handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
+                    {
+                        if (errors == System.Net.Security.SslPolicyErrors.None) return true;
+                        if (cert == null || chain == null) return false;
+                        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                        chain.ChainPolicy.CustomTrustStore.Add(caCert);
+                        return chain.Build(new X509Certificate2(cert));
+                    };
+                }
                 options.HttpHandler = handler;
             }
 #endif
@@ -77,15 +93,31 @@ internal class SpiceFlightClient : IDisposable
 #if NET8_0_OR_GREATER
         if (useTls)
         {
-            messageHandler = new SocketsHttpHandler
+            var handler = new SocketsHttpHandler
             {
                 EnableMultipleHttp2Connections = true,
-                // Force periodic connection recycling to trigger DNS re-resolution.
-                // Without this, HTTP/2 connections are kept alive indefinitely and
-                // the client can get stuck on stale IPs when backend targets change
-                // (e.g. AWS ALB target rotation).
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             };
+            if (tlsClientCertFile != null && tlsClientKeyFile != null)
+            {
+                var clientCert = X509Certificate2.CreateFromPemFile(tlsClientCertFile, tlsClientKeyFile);
+                handler.SslOptions.ClientCertificates = new X509Certificate2Collection { clientCert };
+            }
+            if (tlsRootCertFile != null)
+            {
+                #pragma warning disable SYSLIB0057
+                    var caCert = new X509Certificate2(tlsRootCertFile);
+#pragma warning restore SYSLIB0057
+                handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
+                {
+                    if (errors == System.Net.Security.SslPolicyErrors.None) return true;
+                    if (cert == null || chain == null) return false;
+                    chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                    chain.ChainPolicy.CustomTrustStore.Add(caCert);
+                    return chain.Build(new X509Certificate2(cert));
+                };
+            }
+            messageHandler = handler;
         }
         else
 #endif
@@ -112,13 +144,13 @@ internal class SpiceFlightClient : IDisposable
         return responseHeaders.Get("authorization") ?? trailers.Get("authorization");
     }
 
-    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls)
+    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
     {
         _retryPolicy = RetryPolicyFactory.CreateRpcRetryPolicy(
             maxRetries,
             (ex, ts, attempt) => RetryPolicyFactory.LogRetry("Flight", ex, ts, attempt));
 
-        var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls);
+        var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls, tlsClientCertFile, tlsClientKeyFile, tlsRootCertFile);
         _httpClient = options.HttpClient;
 
         _channel = GrpcChannel.ForAddress(address, options);
