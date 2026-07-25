@@ -55,4 +55,9 @@
         </AssemblyAttribute>
     </ItemGroup>
 
+    <!-- System.Text.Json ships in-box for .NET 8.0+; netstandard2.0 needs the package. -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="System.Text.Json" Version="9.0.9" />
+    </ItemGroup>
+
 </Project>

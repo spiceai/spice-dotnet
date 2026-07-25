@@ -140,6 +140,43 @@ using var client = new SpiceClientBuilder().Build();
 await client.RefreshDatasetAsync("my_dataset");
 ```
 
+##### Refresh Options
+
+Override the dataset's configured refresh settings for a single refresh by passing
+`RefreshOptions`. Any option left unset falls back to the dataset's Spicepod configuration.
+
+```csharp
+using Spice;
+using Spice.Datasets;
+
+using var client = new SpiceClientBuilder().Build();
+
+await client.RefreshDatasetAsync("taxi_trips", new RefreshOptions()
+    .WithRefreshSql("SELECT * FROM taxi_trips WHERE tip_amount > 10.0")
+    .WithRefreshMode(RefreshMode.Append)
+    .WithMaxJitter(TimeSpan.FromSeconds(10)));
+```
+
+Object initializer syntax works too:
+
+```csharp
+await client.RefreshDatasetAsync("taxi_trips", new RefreshOptions
+{
+    RefreshSql = "SELECT * FROM taxi_trips WHERE tip_amount > 10.0",
+    RefreshMode = RefreshMode.Append,
+    MaxJitter = TimeSpan.FromSeconds(10),
+});
+```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `RefreshSql` | `string` | The SQL statement used for this refresh. Defaults to the dataset's `refresh_sql`. |
+| `RefreshMode` | `RefreshMode` | `Full` replaces the accelerated data; `Append` adds newly returned rows. Defaults to the dataset's `refresh_mode`. |
+| `MaxJitter` | `TimeSpan` | Maximum jitter added before the refresh starts. Defaults to the dataset's `refresh_jitter_max`. |
+
+> **Note**: On-demand refreshes apply to the `full` and `append` refresh modes. Datasets accelerated with
+> `changes` mode are kept up to date by change data capture and are not refreshed through this API.
+
 #### Custom Connection Settings
 
 ```csharp
@@ -207,12 +244,17 @@ var data = await client.Query(
 
 ```csharp
 using Spice;
+using Spice.Datasets;
 
 using var client = new SpiceClientBuilder()
     .WithSpiceCloud("API_KEY")
     .Build();
 
 await client.RefreshDatasetAsync("my_dataset");
+
+// Or with refresh overrides for this refresh only
+await client.RefreshDatasetAsync("my_dataset", new RefreshOptions()
+    .WithRefreshMode(RefreshMode.Append));
 ```
 
 ### Memory Management

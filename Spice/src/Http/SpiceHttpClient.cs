@@ -23,6 +23,7 @@ SOFTWARE.
 using System.Net.Http.Headers;
 using System.Text;
 using Spice.Auth;
+using Spice.Datasets;
 
 namespace Spice.Http;
 
@@ -121,7 +122,18 @@ internal class SpiceHttpClient : ISpiceHttpClient
     /// <returns>A task representing the asynchronous operation</returns>
     /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
-    public async Task RefreshDatasetAsync(string datasetName)
+    public Task RefreshDatasetAsync(string datasetName) => RefreshDatasetAsync(datasetName, null);
+
+    /// <summary>
+    /// Refreshes a dataset in the Spice runtime, overriding the dataset's configured
+    /// refresh settings for this refresh only.
+    /// </summary>
+    /// <param name="datasetName">The name of the dataset to refresh</param>
+    /// <param name="options">Overrides for this refresh, or null to use the dataset configuration</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task RefreshDatasetAsync(string datasetName, RefreshOptions? options)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -132,7 +144,8 @@ internal class SpiceHttpClient : ISpiceHttpClient
 #endif
 
         var url = $"{_httpAddress}/v1/datasets/{datasetName}/acceleration/refresh";
-        var response = await _httpClient.PostAsync(url, null).ConfigureAwait(false);
+        using var content = new StringContent(options?.ToJson() ?? "{}", Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(url, content).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 

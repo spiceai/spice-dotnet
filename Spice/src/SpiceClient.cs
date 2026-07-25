@@ -24,6 +24,7 @@ using Apache.Arrow.Flight.Client;
 using Apache.Arrow.Ipc;
 using Spice.Adbc;
 using Spice.Config;
+using Spice.Datasets;
 using Spice.Flight;
 using Spice.Http;
 
@@ -171,13 +172,32 @@ public class SpiceClient : IDisposable
     }
 
     /// <summary>
-    /// Refreshes a dataset in the Spice runtime.
+    /// Refreshes a dataset in the Spice runtime using the dataset's configured refresh settings.
     /// </summary>
     /// <param name="datasetName">The name of the dataset to refresh</param>
     /// <returns>A task representing the asynchronous operation</returns>
     /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
-    public Task RefreshDatasetAsync(string datasetName)
+    public Task RefreshDatasetAsync(string datasetName) => RefreshDatasetAsync(datasetName, null);
+
+    /// <summary>
+    /// Refreshes a dataset in the Spice runtime, overriding the dataset's configured
+    /// refresh settings for this refresh only.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Refresh only the recent rows, appending them to the accelerated data.
+    /// await client.RefreshDatasetAsync("taxi_trips", new RefreshOptions()
+    ///     .WithRefreshSql("SELECT * FROM taxi_trips WHERE tip_amount &gt; 10.0")
+    ///     .WithRefreshMode(RefreshMode.Append));
+    /// </code>
+    /// </example>
+    /// <param name="datasetName">The name of the dataset to refresh</param>
+    /// <param name="options">Overrides for this refresh, or null to use the dataset configuration</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task RefreshDatasetAsync(string datasetName, RefreshOptions? options)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -186,7 +206,7 @@ public class SpiceClient : IDisposable
 #endif
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
-        return HttpClient.RefreshDatasetAsync(datasetName);
+        return HttpClient.RefreshDatasetAsync(datasetName, options);
     }
 
     private bool _disposed;
