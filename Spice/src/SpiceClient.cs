@@ -189,6 +189,67 @@ public class SpiceClient : IDisposable
         return HttpClient.RefreshDatasetAsync(datasetName);
     }
 
+    /// <summary>
+    /// Checks whether the Spice runtime is healthy, i.e. the process is up and serving HTTP.
+    /// This is the liveness signal; use <see cref="IsSpiceReadyAsync"/> to find out whether the
+    /// runtime has finished loading and can serve queries.
+    ///
+    /// <para>
+    /// A probe reports false rather than throwing when the runtime is unreachable. To bound how
+    /// long it waits, pass a token from a <see cref="CancellationTokenSource"/> with a timeout.
+    /// </para>
+    ///
+    /// <example>
+    /// <code>
+    /// using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+    /// if (!await client.IsSpiceHealthyAsync(cts.Token))
+    /// {
+    ///     // The runtime is not up yet.
+    /// }
+    /// </code>
+    /// </example>
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports healthy, false otherwise</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    public Task<bool> IsSpiceHealthyAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.IsSpiceHealthyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks whether the Spice runtime is ready to serve queries. The runtime reports ready once
+    /// every component — datasets, accelerations, models — has finished loading, which makes this
+    /// the check to gate application startup on.
+    ///
+    /// <para>
+    /// On Spice.ai Cloud this endpoint is authenticated; configure an API key on the builder.
+    /// </para>
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports ready, false otherwise</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    public Task<bool> IsSpiceReadyAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.IsSpiceReadyAsync(cancellationToken);
+    }
+
     private bool _disposed;
 
     /// <summary>

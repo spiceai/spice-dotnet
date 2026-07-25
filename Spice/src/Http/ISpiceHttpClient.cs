@@ -44,4 +44,20 @@ public interface ISpiceHttpClient : IDisposable
     /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
     Task RefreshDatasetAsync(string datasetName);
+
+    /// <summary>
+    /// Checks whether the Spice runtime is healthy by calling the <c>/health</c> endpoint.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports healthy, false otherwise</returns>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    Task<bool> IsSpiceHealthyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks whether the Spice runtime is ready to serve queries by calling the <c>/v1/ready</c> endpoint.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports ready, false otherwise</returns>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    Task<bool> IsSpiceReadyAsync(CancellationToken cancellationToken = default);
 }
