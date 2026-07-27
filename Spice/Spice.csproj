@@ -55,4 +55,14 @@
         </AssemblyAttribute>
     </ItemGroup>
 
+    <!--
+        System.Text.Json arrives transitively via Apache.Arrow.Adbc, but search
+        serialization depends on it directly, so pin it explicitly. The version matches
+        what Apache.Arrow.Adbc already resolves to; netstandard2.0 needs the package
+        because, unlike net8.0+, it has no in-box System.Text.Json.
+    -->
+    <ItemGroup>
+        <PackageReference Include="System.Text.Json" Version="9.0.9" />
+    </ItemGroup>
+
 </Project>
