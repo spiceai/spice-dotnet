@@ -160,11 +160,11 @@ internal class SpiceHttpClient : ISpiceHttpClient
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Text, nameof(request));
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Text, $"{nameof(request)}.{nameof(request.Text)}");
 #else
         if (_disposed) throw new ObjectDisposedException(GetType().FullName);
         ThrowHelper.ThrowIfNull(request, nameof(request));
-        ThrowHelper.ThrowIfNullOrWhiteSpace(request.Text, nameof(request));
+        ThrowHelper.ThrowIfNullOrWhiteSpace(request.Text, $"{nameof(request)}.{nameof(request.Text)}");
 #endif
 
         var url = $"{_httpAddress}/v1/search";
