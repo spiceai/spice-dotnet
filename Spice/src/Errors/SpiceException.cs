@@ -36,4 +36,10 @@ public class SpiceException : Exception
     {
         Status = status;
     }
+
+    internal SpiceException(SpiceStatus status, string message, Exception? innerException)
+        : base(message, innerException)
+    {
+        Status = status;
+    }
 }
