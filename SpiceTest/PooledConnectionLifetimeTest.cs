@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Spice.ai OSS Authors
+Copyright 2026 The Spice.ai OSS Authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
