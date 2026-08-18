@@ -73,7 +73,7 @@ public class MtlsTest
                 new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.DigitalSignature, true));
             CaCert = caRequest.CreateSelfSigned(_notBefore, _notAfter);
 
-            ServerCert = IssueLeaf("CN=127.0.0.1", isServer: true);
+            ServerCert = MakeUsableAsServerCertificateOnWindows(IssueLeaf("CN=127.0.0.1", isServer: true));
             var (clientCertPem, clientKeyPem) = IssueLeafPem("CN=spice-dotnet-test-client");
 
             CaCertFile = Path.Combine(_tempDir, "ca.pem");
@@ -104,17 +104,35 @@ public class MtlsTest
             var serial = new byte[8];
             RandomNumberGenerator.Fill(serial);
             using var publicOnly = request.Create(CaCert, _notBefore, _notAfter, serial);
-            using var withEphemeralKey = publicOnly.CopyWithPrivateKey(key);
+            return publicOnly.CopyWithPrivateKey(key);
+        }
 
-            // A cert whose private key is still the ephemeral CNG key CopyWithPrivateKey
-            // attached fails SslStream server-side use on Windows (Schannel needs the key
-            // in an importable PKCS#12 form; OpenSSL-backed macOS/Linux don't care) — round
-            // -trip through PKCS#12 so the certificate works as a server certificate on all
-            // three platforms this SDK targets.
+        /// <summary>
+        /// A cert whose private key is still the ephemeral CNG key CopyWithPrivateKey attached
+        /// fails SslStream server-side use on Windows (Schannel needs the key in an importable
+        /// PKCS#12 form; OpenSSL-backed macOS/Linux don't care) — round-trip through PKCS#12 so
+        /// the certificate works as a server certificate on all three platforms this SDK targets.
+        /// Only the server certificate needs this: it's the only one used live, in-process, as
+        /// an SslStream certificate. The client certificate is only ever serialized to PEM files
+        /// on disk (see IssueLeafPem) and reloaded independently later, so it never goes through
+        /// SslStream directly in this process — and re-importing it here would be actively
+        /// harmful, since exporting a PEM private key back out of a re-imported PKCS#12 CNG key
+        /// fails on .NET 8 + Windows with "The requested operation is not supported."
+        /// </summary>
+        private static X509Certificate2 MakeUsableAsServerCertificateOnWindows(X509Certificate2 certificate)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return certificate;
+            }
+
+            using (certificate)
+            {
 #pragma warning disable SYSLIB0057
-            return new X509Certificate2(
-                withEphemeralKey.Export(X509ContentType.Pkcs12), (string?)null, X509KeyStorageFlags.Exportable);
+                return new X509Certificate2(
+                    certificate.Export(X509ContentType.Pkcs12), (string?)null, X509KeyStorageFlags.Exportable);
 #pragma warning restore SYSLIB0057
+            }
         }
 
         private (string CertPem, string KeyPem) IssueLeafPem(string subject)
