@@ -104,7 +104,17 @@ public class MtlsTest
             var serial = new byte[8];
             RandomNumberGenerator.Fill(serial);
             using var publicOnly = request.Create(CaCert, _notBefore, _notAfter, serial);
-            return publicOnly.CopyWithPrivateKey(key);
+            using var withEphemeralKey = publicOnly.CopyWithPrivateKey(key);
+
+            // A cert whose private key is still the ephemeral CNG key CopyWithPrivateKey
+            // attached fails SslStream server-side use on Windows (Schannel needs the key
+            // in an importable PKCS#12 form; OpenSSL-backed macOS/Linux don't care) — round
+            // -trip through PKCS#12 so the certificate works as a server certificate on all
+            // three platforms this SDK targets.
+#pragma warning disable SYSLIB0057
+            return new X509Certificate2(
+                withEphemeralKey.Export(X509ContentType.Pkcs12), (string?)null, X509KeyStorageFlags.Exportable);
+#pragma warning restore SYSLIB0057
         }
 
         private (string CertPem, string KeyPem) IssueLeafPem(string subject)
