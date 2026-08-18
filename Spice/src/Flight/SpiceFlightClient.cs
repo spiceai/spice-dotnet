@@ -62,7 +62,7 @@ internal class SpiceFlightClient : IDisposable
                 };
                 if (tlsClientCertFile != null && tlsClientKeyFile != null)
                 {
-                    var clientCert = X509Certificate2.CreateFromPemFile(tlsClientCertFile, tlsClientKeyFile);
+                    var clientCert = ClientCertificateLoader.LoadForClientAuth(tlsClientCertFile, tlsClientKeyFile);
                     handler.SslOptions.ClientCertificates = new X509Certificate2Collection { clientCert };
                 }
                 if (tlsRootCertFile != null)
@@ -100,7 +100,7 @@ internal class SpiceFlightClient : IDisposable
             };
             if (tlsClientCertFile != null && tlsClientKeyFile != null)
             {
-                var clientCert = X509Certificate2.CreateFromPemFile(tlsClientCertFile, tlsClientKeyFile);
+                var clientCert = ClientCertificateLoader.LoadForClientAuth(tlsClientCertFile, tlsClientKeyFile);
                 handler.SslOptions.ClientCertificates = new X509Certificate2Collection { clientCert };
             }
             if (tlsRootCertFile != null)
