@@ -26,6 +26,7 @@ using Spice.Adbc;
 using Spice.Config;
 using Spice.Flight;
 using Spice.Http;
+using Spice.Search;
 
 namespace Spice;
 
@@ -248,6 +249,33 @@ public class SpiceClient : IDisposable
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
         return HttpClient.IsSpiceReadyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a vector, keyword, or hybrid search.
+    /// </summary>
+    /// <remarks>
+    /// Searches datasets that have an embedding column and a loaded embedding model,
+    /// returning the documents most similar to the request text. Setting
+    /// <see cref="SearchRequest.Keywords"/> pre-filters the embedding column with a
+    /// lexical search first, making the search hybrid.
+    /// </remarks>
+    /// <param name="request">The search to run</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The matches, ordered by descending score</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the search text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.SearchAsync(request, cancellationToken);
     }
 
     private bool _disposed;

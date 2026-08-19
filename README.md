@@ -252,6 +252,50 @@ using var client = new SpiceClientBuilder()
 await client.RefreshDatasetAsync("my_dataset");
 ```
 
+#### Search
+
+`SearchAsync` runs vector similarity, keyword, and hybrid search against datasets that have
+an embedding column and a loaded embedding model.
+
+```csharp
+using Spice;
+using Spice.Search;
+
+using var client = new SpiceClientBuilder().Build();
+
+var response = await client.SearchAsync(new SearchRequest("tickets to Tokyo")
+{
+    Datasets = new[] { "app_messages" },
+    Limit = 3,
+});
+
+Console.WriteLine($"{response.Results.Count} matches in {response.DurationMs}ms");
+foreach (var match in response.Results)
+{
+    Console.WriteLine($"{match.Dataset} {match.Score}");
+}
+```
+
+Only `Text` is required. `Datasets` restricts the search — leave it unset to search every
+dataset with an embedding column. `Limit` caps matches per dataset, `Where` applies an SQL
+predicate before the search, and `AdditionalColumns` names extra columns to return. Setting
+`Keywords` pre-filters the embedding column with a lexical search before the vector search
+runs, making the search hybrid:
+
+```csharp
+var response = await client.SearchAsync(new SearchRequest("tickets to Tokyo")
+{
+    Where = "city = 'Tokyo'",
+    AdditionalColumns = new[] { "timestamp" },
+    Keywords = new[] { "plane", "tickets" },
+});
+```
+
+Each `SearchMatch` carries the `Dataset` it was found in, its similarity `Score`, the
+matched column values in `Matches`, the row's `PrimaryKey`, the columns requested via
+`AdditionalColumns` in `Data`, and any `Metadata`. The runtime omits the last three when
+empty; they default to empty dictionaries, so they can be read without a null check.
+
 ### Memory Management
 
 The `SpiceClient` implements `IDisposable` and should be properly disposed to release network resources (gRPC channels, HTTP clients). Use the `using` statement or `using` declaration for automatic disposal:
