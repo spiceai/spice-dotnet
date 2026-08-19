@@ -166,15 +166,81 @@ internal class SpiceFlightClient : IDisposable
     {
         var stream = _flightClient.Handshake();
 
-        var headers = await stream.ResponseHeadersAsync.ConfigureAwait(false);
-        var token = GetAuthToken(headers, stream.GetTrailers());
-        
+        Metadata headers;
+        try
+        {
+            headers = await stream.ResponseHeadersAsync.ConfigureAwait(false);
+        }
+        catch (RpcException ex)
+        {
+            throw new SpiceException(
+                SpiceStatus.FailedToAuthenticate,
+                $"Failed to authenticate: {DescribeRpcFailure(ex)}",
+                ex);
+        }
+
+        // Trailers are only readable once the call has completed. Reading them
+        // eagerly throws InvalidOperationException on a handshake that failed,
+        // which masks the gRPC status that says what actually went wrong.
+        RpcException? failure = null;
+        var token = headers.Get("authorization");
+        if (token == null)
+        {
+            token = TryGetTrailerToken(stream, out failure);
+        }
+
         if (token == null || _httpClient == null)
         {
-            throw new SpiceException(SpiceStatus.FailedToAuthenticate, "Failed to authenticate");
+            var reason = failure == null
+                ? "the runtime returned no authorization token."
+                : DescribeRpcFailure(failure);
+
+            throw new SpiceException(
+                SpiceStatus.FailedToAuthenticate,
+                $"Failed to authenticate: {reason} Check that the API key is valid for this endpoint.",
+                failure);
         }
 
         _httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.Value);
+    }
+
+    /// <summary>
+    /// Reads the authorization token from the handshake trailers, if the call
+    /// completed far enough for them to be available.
+    /// </summary>
+    /// <param name="stream">The handshake call</param>
+    /// <param name="failure">The gRPC failure, when the trailers could not be read</param>
+    /// <returns>The token entry, or null</returns>
+    private static Metadata.Entry? TryGetTrailerToken(
+        AsyncDuplexStreamingCall<FlightHandshakeRequest, FlightHandshakeResponse> stream,
+        out RpcException? failure)
+    {
+        failure = null;
+        try
+        {
+            return stream.GetTrailers().Get("authorization");
+        }
+        catch (RpcException ex)
+        {
+            failure = ex;
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // The handshake never completed, so there are no trailers to read.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Renders a gRPC failure as something a caller can act on.
+    /// </summary>
+    /// <param name="ex">The gRPC exception</param>
+    /// <returns>A short description of the failure</returns>
+    private static string DescribeRpcFailure(RpcException ex)
+    {
+        var detail = string.IsNullOrWhiteSpace(ex.Status.Detail) ? ex.Message : ex.Status.Detail;
+        return $"{ex.StatusCode} - {detail}.";
     }
 
     internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)

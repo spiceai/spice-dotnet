@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 using Spice.Datasets;
+using Spice.Search;
 
 namespace Spice.Http;
 
@@ -57,4 +58,15 @@ public interface ISpiceHttpClient : IDisposable
     /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
     Task RefreshDatasetAsync(string datasetName, RefreshOptions? options);
+
+    /// <summary>
+    /// Runs a vector, keyword, or hybrid search against datasets with an embedding column.
+    /// </summary>
+    /// <param name="request">The search to run</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The matches, ordered by descending score</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the search text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken cancellationToken = default);
 }

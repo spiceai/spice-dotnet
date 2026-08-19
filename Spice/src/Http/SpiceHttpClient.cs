@@ -22,8 +22,10 @@ SOFTWARE.
 
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Spice.Auth;
 using Spice.Datasets;
+using Spice.Search;
 
 namespace Spice.Http;
 
@@ -147,6 +149,89 @@ internal class SpiceHttpClient : ISpiceHttpClient
         using var content = new StringContent(options?.ToJson() ?? "{}", Encoding.UTF8, "application/json");
         var response = await _httpClient.PostAsync(url, content).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Options used to serialize search requests and deserialize search responses.
+    /// </summary>
+    private static readonly JsonSerializerOptions SearchJsonOptions = new()
+    {
+        PropertyNamingPolicy = null,
+    };
+
+    /// <summary>
+    /// Runs a vector, keyword, or hybrid search against datasets with an embedding column.
+    /// </summary>
+    /// <param name="request">The search to run</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The matches, ordered by descending score</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the search text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Text, $"{nameof(request)}.{nameof(request.Text)}");
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+        ThrowHelper.ThrowIfNull(request, nameof(request));
+        ThrowHelper.ThrowIfNullOrWhiteSpace(request.Text, $"{nameof(request)}.{nameof(request.Text)}");
+#endif
+
+        var url = $"{_httpAddress}/v1/search";
+        var json = JsonSerializer.Serialize(request, SearchJsonOptions);
+
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await _httpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
+
+#if NET8_0_OR_GREATER
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+        // netstandard2.0 has no CancellationToken overload for ReadAsStringAsync.
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+
+        if (!response.IsSuccessStatusCode)
+        {
+            // Surface the runtime's own message — it names what the caller needs to fix.
+            throw new HttpRequestException(
+                $"Search failed with status {(int)response.StatusCode}: {ExtractErrorMessage(body)}");
+        }
+
+        return JsonSerializer.Deserialize<SearchResponse>(body, SearchJsonOptions) ?? new SearchResponse();
+    }
+
+    /// <summary>
+    /// Pulls the runtime's error message out of a failed response body, falling back to
+    /// the raw body when it is not the expected shape.
+    /// </summary>
+    /// <param name="body">The response body</param>
+    /// <returns>The message to report</returns>
+    private static string ExtractErrorMessage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "(no response body)";
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.String)
+            {
+                return error.GetString() ?? body;
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON — fall through and report the body verbatim.
+        }
+
+        return body;
     }
 
     /// <summary>
