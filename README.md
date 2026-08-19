@@ -179,6 +179,52 @@ All options are optional — leave any of them unset (`null`) to fall back to th
 > **Note**: On-demand refreshes apply to the `full` and `append` refresh modes. Datasets accelerated with
 > `changes` mode are kept up to date by change data capture and are not refreshed through this API.
 
+#### Health and Readiness
+
+`IsSpiceHealthyAsync` reports whether the runtime process is up. `IsSpiceReadyAsync` reports
+whether it has finished loading every component and can serve queries — that is the one to gate
+application startup on.
+
+```csharp
+using Spice;
+
+using var client = new SpiceClientBuilder().Build();
+
+if (await client.IsSpiceHealthyAsync())
+{
+    Console.WriteLine("Spice is up");
+}
+
+if (await client.IsSpiceReadyAsync())
+{
+    Console.WriteLine("Spice is ready to serve queries");
+}
+```
+
+Both probes return `false` when the runtime is unreachable rather than throwing, so they can be
+polled directly. Pass a `CancellationToken` to end the poll loop after a deadline — cancelling it
+throws `OperationCanceledException` out of the in-flight probe call, so wrap the loop in a
+`try`/`catch` (or let it propagate) rather than expecting a `false` result:
+
+```csharp
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+try
+{
+    while (!await client.IsSpiceReadyAsync(cts.Token))
+    {
+        await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
+    }
+}
+catch (OperationCanceledException)
+{
+    // Did not become ready within 30 seconds.
+}
+```
+
+On Spice.ai Cloud the readiness endpoint is authenticated — configure an API key with
+`WithSpiceCloud` or `WithApiKey`.
+
 #### Custom Connection Settings
 
 ```csharp
