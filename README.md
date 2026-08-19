@@ -349,6 +349,30 @@ matched column values in `Matches`, the row's `PrimaryKey`, the columns requeste
 `AdditionalColumns` in `Data`, and any `Metadata`. The runtime omits the last three when
 empty; they default to empty dictionaries, so they can be read without a null check.
 
+#### NSQL
+
+`NsqlAsync` answers a natural-language question by having the runtime's configured LLM
+generate SQL, then running it. `NsqlGenerateSqlAsync` translates the question into SQL
+without running it. Both require an LLM model configured in the Spicepod.
+
+```csharp
+using Spice;
+using Spice.Nsql;
+
+using var client = new SpiceClientBuilder().Build();
+
+var result = await client.NsqlAsync(new NsqlRequest("top 5 customers by revenue"));
+
+Console.WriteLine(result.SQL);
+foreach (var row in result.Data)
+{
+    Console.WriteLine(row["customer_id"]);
+}
+
+// Or generate the SQL without running it
+var sql = await client.NsqlGenerateSqlAsync(new NsqlRequest("how many orders"));
+```
+
 ### Memory Management
 
 The `SpiceClient` implements `IDisposable` and should be properly disposed to release network resources (gRPC channels, HTTP clients). Use the `using` statement or `using` declaration for automatic disposal:

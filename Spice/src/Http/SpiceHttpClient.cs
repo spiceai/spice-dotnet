@@ -26,6 +26,7 @@ using System.Text.Json;
 using Spice.Auth;
 using Spice.Common;
 using Spice.Datasets;
+using Spice.Nsql;
 using Spice.Search;
 
 namespace Spice.Http;
@@ -280,6 +281,102 @@ internal class SpiceHttpClient : ISpiceHttpClient
         }
 
         return JsonSerializer.Deserialize<SearchResponse>(body, SearchJsonOptions) ?? new SearchResponse();
+    }
+
+    /// <summary>
+    /// Asks the runtime for the envelope carrying the generated SQL alongside the results.
+    /// Without it, <c>/v1/nsql</c> returns a bare array of rows and the generated SQL is lost.
+    /// </summary>
+    private const string NsqlJsonMediaType = "application/vnd.spiceai.nsql.v1+json";
+
+    /// <summary>
+    /// Asks the runtime to generate SQL without executing it.
+    /// </summary>
+    private const string NsqlSqlMediaType = "application/sql";
+
+    /// <summary>
+    /// Options used to serialize NSQL requests and deserialize NSQL responses.
+    /// </summary>
+    private static readonly JsonSerializerOptions NsqlJsonOptions = new()
+    {
+        PropertyNamingPolicy = null,
+    };
+
+    /// <summary>
+    /// Answers a natural-language query by having the runtime's configured LLM generate SQL,
+    /// then running it, via the <c>/v1/nsql</c> endpoint.
+    /// </summary>
+    /// <param name="request">The natural-language query to answer</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL alongside the rows it returned</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task<NsqlResponse> NsqlAsync(NsqlRequest request, CancellationToken cancellationToken = default)
+    {
+        var body = await DoNsqlRequestAsync(request, NsqlJsonMediaType, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Deserialize<NsqlResponse>(body, NsqlJsonOptions) ?? new NsqlResponse();
+    }
+
+    /// <summary>
+    /// Translates a natural-language query into SQL without running it, via the
+    /// <c>/v1/nsql</c> endpoint.
+    /// </summary>
+    /// <param name="request">The natural-language query to translate</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task<string> NsqlGenerateSqlAsync(NsqlRequest request, CancellationToken cancellationToken = default)
+    {
+        var body = await DoNsqlRequestAsync(request, NsqlSqlMediaType, cancellationToken).ConfigureAwait(false);
+        return body.Trim();
+    }
+
+    /// <summary>
+    /// Posts <paramref name="request"/> to <c>/v1/nsql</c> asking for <paramref name="accept"/>,
+    /// and returns the response body when the runtime answered with success.
+    /// </summary>
+    private async Task<string> DoNsqlRequestAsync(NsqlRequest request, string accept, CancellationToken cancellationToken)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Query, $"{nameof(request)}.{nameof(request.Query)}");
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+        ThrowHelper.ThrowIfNull(request, nameof(request));
+        ThrowHelper.ThrowIfNullOrWhiteSpace(request.Query, $"{nameof(request)}.{nameof(request.Query)}");
+#endif
+
+        var url = $"{_httpAddress}/v1/nsql";
+        var json = JsonSerializer.Serialize(request, NsqlJsonOptions);
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+
+#if NET8_0_OR_GREATER
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+        // netstandard2.0 has no CancellationToken overload for ReadAsStringAsync.
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+
+        if (!response.IsSuccessStatusCode)
+        {
+            // The runtime explains NSQL failures in the body - a missing or ambiguous model,
+            // or SQL that would not run. Surface it rather than only the status code.
+            throw new HttpRequestException(
+                $"NSQL request failed with status {(int)response.StatusCode}: {ExtractErrorMessage(body)}");
+        }
+
+        return body;
     }
 
     /// <summary>
