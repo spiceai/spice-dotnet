@@ -259,7 +259,7 @@ internal class SpiceFlightClient : IDisposable
         };
     }
 
-    internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)
+    internal async Task<FlightClientRecordBatchStreamReader> SqlAsync(string sql)
     {
         if (string.IsNullOrEmpty(sql))
         {
@@ -290,7 +290,7 @@ internal class SpiceFlightClient : IDisposable
     /// <param name="sql">The SQL to run</param>
     /// <param name="parameters">Positionally-bound parameter values, or null for none</param>
     /// <param name="cancellationToken">Token to cancel the submission</param>
-    internal async Task<AsyncQuery> SubmitQueryAsync(string sql, object? parameters, CancellationToken cancellationToken)
+    internal async Task<AsyncQuery> QueryAsync(string sql, object? parameters, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(sql))
         {

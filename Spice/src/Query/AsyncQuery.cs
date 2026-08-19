@@ -30,7 +30,7 @@ namespace Spice.Query;
 
 /// <summary>
 /// A handle to a query submitted for asynchronous execution via
-/// <see cref="SpiceClient.SubmitQueryAsync"/> or <see cref="SpiceClient.SubmitQueryWithParamsAsync"/>.
+/// <see cref="SpiceClient.QueryAsync"/> or <see cref="SpiceClient.QueryWithParamsAsync"/>.
 /// </summary>
 /// <remarks>
 /// Not safe for concurrent use from multiple threads.

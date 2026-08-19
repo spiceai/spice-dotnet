@@ -110,14 +110,19 @@ public class SpiceClient : IDisposable
     }
 
     /// <summary>
-    /// Runs the query against the Flight endpoint. 
+    /// Runs sql against the Flight endpoint and streams the results back synchronously.
     /// </summary>
+    /// <remarks>
+    /// Use <see cref="QueryAsync"/> instead to submit sql for asynchronous execution on the
+    /// runtime and poll for completion, which requires the runtime to be running in
+    /// distributed/scheduler mode.
+    /// </remarks>
     /// <returns>A task representing asynchronus operation, with a result of type <see cref="FlightClientRecordBatchStreamReader"/></returns>
     /// <param name="sql">SQL to be executed against Spice</param>
     /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
     /// <exception cref="Spice.Errors.SpiceException">Spice exception</exception>
     /// <exception cref="Grpc.Core.RpcException">gRPC exception</exception>
-    public Task<FlightClientRecordBatchStreamReader> Query(string sql)
+    public Task<FlightClientRecordBatchStreamReader> SqlAsync(string sql)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -126,14 +131,14 @@ public class SpiceClient : IDisposable
 #endif
         if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
-        return FlightClient.Query(sql);
+        return FlightClient.SqlAsync(sql);
     }
 
     /// <summary>
-    /// Executes a parameterized SQL query using ADBC (Arrow Database Connectivity).
+    /// Executes a parameterized SQL query synchronously using ADBC (Arrow Database Connectivity).
     /// This is the recommended method for queries with user input to prevent SQL injection.
     /// Parameters should use positional placeholders ($1, $2, etc.) in the SQL query.
-    /// 
+    ///
     /// <para>
     /// Parameters can be:
     /// <list type="bullet">
@@ -141,27 +146,31 @@ public class SpiceClient : IDisposable
     /// <item><description>Param instances with explicit type annotation using Param factory methods</description></item>
     /// </list>
     /// </para>
-    /// 
+    ///
     /// <example>
     /// <code>
     /// // With automatic type inference
-    /// var result = await client.QueryWithParams(
+    /// var result = await client.SqlWithParamsAsync(
     ///     "SELECT * FROM table WHERE id = $1 AND name = $2",
     ///     123, "test");
-    /// 
+    ///
     /// // With explicit types
-    /// var result = await client.QueryWithParams(
+    /// var result = await client.SqlWithParamsAsync(
     ///     "SELECT * FROM table WHERE id = $1 AND amount = $2",
     ///     Param.Int32(123), Param.Double(99.99));
     /// </code>
     /// </example>
     /// </summary>
+    /// <remarks>
+    /// Use <see cref="QueryWithParamsAsync"/> instead to submit the parameterized query for
+    /// asynchronous execution on the runtime, which requires distributed/scheduler mode.
+    /// </remarks>
     /// <param name="sql">SQL query with positional parameter placeholders ($1, $2, etc.)</param>
     /// <param name="parameters">The parameter values (can be plain values or Param instances)</param>
     /// <returns>A task representing the asynchronous operation, with an IArrowArrayStream result</returns>
     /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
     /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
-    public Task<IArrowArrayStream?> QueryWithParams(string sql, params object?[] parameters)
+    public Task<IArrowArrayStream?> SqlWithParamsAsync(string sql, params object?[] parameters)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -170,7 +179,7 @@ public class SpiceClient : IDisposable
 #endif
         if (AdbcClient == null) throw new InvalidOperationException("AdbcClient not initialized");
 
-        return AdbcClient.QueryWithParamsAsync(sql, parameters);
+        return AdbcClient.SqlWithParamsAsync(sql, parameters);
     }
 
     /// <summary>
@@ -306,11 +315,11 @@ public class SpiceClient : IDisposable
     /// <remarks>
     /// Async queries require the runtime to be running in distributed/scheduler mode; against
     /// a single-node runtime the runtime returns an error explaining that async queries are
-    /// only available in cluster mode. Use <see cref="Query"/> for synchronous, streaming queries.
+    /// only available in cluster mode. Use <see cref="SqlAsync"/> for synchronous, streaming queries.
     /// </remarks>
     /// <example>
     /// <code>
-    /// var query = await client.SubmitQueryAsync("SELECT * FROM taxi_trips");
+    /// var query = await client.QueryAsync("SELECT * FROM taxi_trips");
     /// await query.WaitAsync();
     /// using var results = await query.GetResultsAsync();
     /// </code>
@@ -320,7 +329,7 @@ public class SpiceClient : IDisposable
     /// <returns>A handle for polling status and retrieving results</returns>
     /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
     /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
-    public Task<AsyncQuery> SubmitQueryAsync(string sql, CancellationToken cancellationToken = default)
+    public Task<AsyncQuery> QueryAsync(string sql, CancellationToken cancellationToken = default)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -329,7 +338,7 @@ public class SpiceClient : IDisposable
 #endif
         if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
-        return FlightClient.SubmitQueryAsync(sql, null, cancellationToken);
+        return FlightClient.QueryAsync(sql, null, cancellationToken);
     }
 
     /// <summary>
@@ -338,14 +347,14 @@ public class SpiceClient : IDisposable
     /// </summary>
     /// <remarks>
     /// Async queries require the runtime to be running in distributed/scheduler mode. Use
-    /// <see cref="QueryWithParams"/> for synchronous, streaming parameterized queries.
+    /// <see cref="SqlWithParamsAsync"/> for synchronous, streaming parameterized queries.
     /// </remarks>
     /// <param name="sql">SQL query with positional parameter placeholders ($1, $2, etc.)</param>
     /// <param name="parameters">The parameter values</param>
     /// <returns>A handle for polling status and retrieving results</returns>
     /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
     /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
-    public Task<AsyncQuery> SubmitQueryWithParamsAsync(string sql, params object?[] parameters)
+    public Task<AsyncQuery> QueryWithParamsAsync(string sql, params object?[] parameters)
     {
 #if NET8_0_OR_GREATER
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -355,7 +364,7 @@ public class SpiceClient : IDisposable
         if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
 
         object? boundParameters = parameters.Length > 0 ? parameters : null;
-        return FlightClient.SubmitQueryAsync(sql, boundParameters, CancellationToken.None);
+        return FlightClient.QueryAsync(sql, boundParameters, CancellationToken.None);
     }
 
     private bool _disposed;

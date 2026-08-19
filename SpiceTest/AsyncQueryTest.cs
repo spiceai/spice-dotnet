@@ -56,7 +56,7 @@ public class AsyncQueryTest
     // ==================== Submit + status ====================
 
     [Test]
-    public async Task Test_SubmitQueryAsync_ReturnsHandle_WithInitialStatus()
+    public async Task Test_QueryAsync_ReturnsHandle_WithInitialStatus()
     {
         await using var server = await AsyncQueryTestServer.StartAsync();
         server.On(AsyncQueryActions.Submit, _ => """{"query_id":"q-1","status":"PENDING"}""");
@@ -64,7 +64,7 @@ public class AsyncQueryTest
 
         using var client = server.BuildClient();
 
-        var query = await client.SubmitQueryAsync("SELECT 1");
+        var query = await client.QueryAsync("SELECT 1");
 
         Assert.That(query.Id, Is.EqualTo("q-1"));
         Assert.That(query.Status, Is.EqualTo(QueryStatus.Pending));
@@ -91,7 +91,7 @@ public class AsyncQueryTest
         });
 
         using var client = server.BuildClient();
-        var query = await client.SubmitQueryAsync("SELECT 1");
+        var query = await client.QueryAsync("SELECT 1");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var status = await query.WaitAsync(cts.Token);
@@ -112,7 +112,7 @@ public class AsyncQueryTest
         server.On(AsyncQueryActions.GetResult, _ => throw new RpcException(new Status(StatusCode.NotFound, "no chunks for an empty result")));
 
         using var client = server.BuildClient();
-        var query = await client.SubmitQueryAsync("SELECT 1 WHERE false");
+        var query = await client.QueryAsync("SELECT 1 WHERE false");
 
         using var reader = await query.GetResultsAsync();
         var batch = await reader.ReadNextRecordBatchAsync();
@@ -132,7 +132,7 @@ public class AsyncQueryTest
         server.OnBytes(AsyncQueryActions.GetResult, _ => chunk);
 
         using var client = server.BuildClient();
-        var query = await client.SubmitQueryAsync("SELECT n FROM t");
+        var query = await client.QueryAsync("SELECT n FROM t");
 
         using var reader = await query.GetResultsAsync();
         var batch = await reader.ReadNextRecordBatchAsync();
@@ -154,7 +154,7 @@ public class AsyncQueryTest
             """{"query_id":"q-5","status":"FAILED","error":{"error_code":"QueryExecutionError","message":"boom"}}""");
 
         using var client = server.BuildClient();
-        var query = await client.SubmitQueryAsync("SELECT 1/0");
+        var query = await client.QueryAsync("SELECT 1/0");
 
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await query.GetResultsAsync());
         Assert.That(ex!.Message, Does.Contain("boom"));
@@ -170,7 +170,7 @@ public class AsyncQueryTest
         server.On(AsyncQueryActions.Cancel, _ => """{"query_id":"q-6","cancelled":true,"status":"CANCELLED"}""");
 
         using var client = server.BuildClient();
-        var query = await client.SubmitQueryAsync("SELECT 1");
+        var query = await client.QueryAsync("SELECT 1");
 
         await query.CancelAsync();
 
@@ -181,7 +181,7 @@ public class AsyncQueryTest
     // ==================== Parameters ====================
 
     [Test]
-    public async Task Test_SubmitQueryWithParamsAsync_PlacesSqlAndParametersInRequestBody()
+    public async Task Test_QueryWithParamsAsync_PlacesSqlAndParametersInRequestBody()
     {
         string? submittedBody = null;
 
@@ -193,7 +193,7 @@ public class AsyncQueryTest
         });
 
         using var client = server.BuildClient();
-        await client.SubmitQueryWithParamsAsync("SELECT * FROM t WHERE id = $1", 42);
+        await client.QueryWithParamsAsync("SELECT * FROM t WHERE id = $1", 42);
 
         Assert.That(submittedBody, Is.Not.Null);
         using var document = JsonDocument.Parse(submittedBody!);
@@ -205,7 +205,7 @@ public class AsyncQueryTest
     }
 
     [Test]
-    public async Task Test_SubmitQueryAsync_WithoutParams_OmitsParametersField()
+    public async Task Test_QueryAsync_WithoutParams_OmitsParametersField()
     {
         string? submittedBody = null;
 
@@ -217,7 +217,7 @@ public class AsyncQueryTest
         });
 
         using var client = server.BuildClient();
-        await client.SubmitQueryAsync("SELECT 1");
+        await client.QueryAsync("SELECT 1");
 
         using var document = JsonDocument.Parse(submittedBody!);
         Assert.That(document.RootElement.TryGetProperty("parameters", out _), Is.False);

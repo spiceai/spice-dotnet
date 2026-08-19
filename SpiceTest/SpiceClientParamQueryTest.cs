@@ -61,7 +61,7 @@ public class SpiceClientParamQueryTest
         
         Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await client.QueryWithParams("SELECT 1");
+            await client.SqlWithParamsAsync("SELECT 1");
         });
     }
 
@@ -243,7 +243,7 @@ public class SpiceClientParamQueryTest
         // After using block, client should be disposed
         Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await clientRef!.Query("SELECT 1");
+            await clientRef!.SqlAsync("SELECT 1");
         });
     }
 }
