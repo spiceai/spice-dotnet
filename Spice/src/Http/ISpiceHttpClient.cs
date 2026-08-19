@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+using Spice.Datasets;
 using Spice.Search;
 
 namespace Spice.Http;
@@ -46,6 +47,17 @@ public interface ISpiceHttpClient : IDisposable
     /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
     Task RefreshDatasetAsync(string datasetName);
+
+    /// <summary>
+    /// Refreshes a dataset in the Spice runtime, overriding the dataset's configured
+    /// refresh settings for this refresh only.
+    /// </summary>
+    /// <param name="datasetName">The name of the dataset to refresh</param>
+    /// <param name="options">Overrides for this refresh, or null to use the dataset configuration</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when datasetName is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task RefreshDatasetAsync(string datasetName, RefreshOptions? options);
 
     /// <summary>
     /// Checks whether the Spice runtime is healthy by calling the <c>/health</c> endpoint.

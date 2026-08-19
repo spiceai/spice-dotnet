@@ -34,9 +34,14 @@ internal static class ThrowHelper
 
     public static void ThrowIfNullOrWhiteSpace(string? argument, string? paramName = null)
     {
+        if (argument is null)
+        {
+            throw new ArgumentNullException(paramName);
+        }
+
         if (string.IsNullOrWhiteSpace(argument))
         {
-            throw new ArgumentException("Value cannot be null or whitespace.", paramName);
+            throw new ArgumentException("Value cannot be empty or whitespace.", paramName);
         }
     }
 
