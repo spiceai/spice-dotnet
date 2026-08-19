@@ -27,6 +27,7 @@ using Spice.Config;
 using Spice.Datasets;
 using Spice.Flight;
 using Spice.Http;
+using Spice.Query;
 using Spice.Search;
 
 namespace Spice;
@@ -296,6 +297,65 @@ public class SpiceClient : IDisposable
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
         return HttpClient.SearchAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Submits sql to the Spice runtime for asynchronous execution and returns a handle for
+    /// polling status and retrieving results.
+    /// </summary>
+    /// <remarks>
+    /// Async queries require the runtime to be running in distributed/scheduler mode; against
+    /// a single-node runtime the runtime returns an error explaining that async queries are
+    /// only available in cluster mode. Use <see cref="Query"/> for synchronous, streaming queries.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var query = await client.SubmitQueryAsync("SELECT * FROM taxi_trips");
+    /// await query.WaitAsync();
+    /// using var results = await query.GetResultsAsync();
+    /// </code>
+    /// </example>
+    /// <param name="sql">SQL to run asynchronously</param>
+    /// <param name="cancellationToken">Token to cancel the submission</param>
+    /// <returns>A handle for polling status and retrieving results</returns>
+    /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    public Task<AsyncQuery> SubmitQueryAsync(string sql, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
+
+        return FlightClient.SubmitQueryAsync(sql, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Submits a parameterized query for asynchronous execution. Parameters are bound
+    /// positionally ($1, $2, ...) and sent as a JSON array, so each must be a JSON-encodable value.
+    /// </summary>
+    /// <remarks>
+    /// Async queries require the runtime to be running in distributed/scheduler mode. Use
+    /// <see cref="QueryWithParams"/> for synchronous, streaming parameterized queries.
+    /// </remarks>
+    /// <param name="sql">SQL query with positional parameter placeholders ($1, $2, etc.)</param>
+    /// <param name="parameters">The parameter values</param>
+    /// <returns>A handle for polling status and retrieving results</returns>
+    /// <exception cref="System.ArgumentException">Thrown when provided sql is null or empty</exception>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    public Task<AsyncQuery> SubmitQueryWithParamsAsync(string sql, params object?[] parameters)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (FlightClient == null) throw new InvalidOperationException("FlightClient not initialized");
+
+        object? boundParameters = parameters.Length > 0 ? parameters : null;
+        return FlightClient.SubmitQueryAsync(sql, boundParameters, CancellationToken.None);
     }
 
     private bool _disposed;

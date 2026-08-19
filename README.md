@@ -349,6 +349,27 @@ matched column values in `Matches`, the row's `PrimaryKey`, the columns requeste
 `AdditionalColumns` in `Data`, and any `Metadata`. The runtime omits the last three when
 empty; they default to empty dictionaries, so they can be read without a null check.
 
+#### Async Queries
+
+`SubmitQueryAsync` submits a query for asynchronous execution over Flight and returns an
+`AsyncQuery` handle for polling status and fetching results, instead of streaming results
+directly like `Query`. This requires the runtime to be running in distributed/scheduler mode.
+
+```csharp
+using Spice;
+
+using var client = new SpiceClientBuilder().Build();
+
+var query = await client.SubmitQueryAsync("SELECT * FROM taxi_trips");
+await query.WaitAsync();
+
+using var results = await query.GetResultsAsync();
+```
+
+`SubmitQueryWithParamsAsync` submits a parameterized query the same way, binding `$1`, `$2`,
+etc. positionally. An `AsyncQuery` also exposes `GetStatusAsync` for a single status poll and
+`CancelAsync` to request cancellation.
+
 ### Memory Management
 
 The `SpiceClient` implements `IDisposable` and should be properly disposed to release network resources (gRPC channels, HTTP clients). Use the `using` statement or `using` declaration for automatic disposal:
