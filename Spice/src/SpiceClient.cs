@@ -27,6 +27,7 @@ using Spice.Config;
 using Spice.Datasets;
 using Spice.Flight;
 using Spice.Http;
+using Spice.Nsql;
 using Spice.Search;
 
 namespace Spice;
@@ -296,6 +297,76 @@ public class SpiceClient : IDisposable
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
         return HttpClient.SearchAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Answers a natural-language query by having the runtime's configured LLM generate SQL,
+    /// then running it.
+    /// </summary>
+    /// <remarks>
+    /// The generated SQL is returned in <see cref="NsqlResponse.SQL"/>. The runtime executes
+    /// it read-only and retries generation when the query fails to run, so a thrown exception
+    /// means generation or execution failed repeatedly.
+    ///
+    /// <para>
+    /// NSQL requires an LLM model configured in the Spicepod. See
+    /// https://docs.spice.ai/features/text-to-sql for how to configure one.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var result = await client.NsqlAsync(new NsqlRequest("top 5 customers by revenue"));
+    /// Console.WriteLine(result.SQL);
+    /// </code>
+    /// </example>
+    /// <param name="request">The natural-language query to answer</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL alongside the rows it returned</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task<NsqlResponse> NsqlAsync(NsqlRequest request, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.NsqlAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Translates a natural-language query into SQL without running it.
+    /// </summary>
+    /// <remarks>
+    /// Use it to inspect or edit the query before running it, or to run it through
+    /// <see cref="Query"/> or <see cref="QueryWithParams"/> so the results arrive as Arrow
+    /// rather than decoded JSON.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sql = await client.NsqlGenerateSqlAsync(new NsqlRequest("how many orders"));
+    /// var result = await client.Query(sql);
+    /// </code>
+    /// </example>
+    /// <param name="request">The natural-language query to translate</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task<string> NsqlGenerateSqlAsync(NsqlRequest request, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.NsqlGenerateSqlAsync(request, cancellationToken);
     }
 
     private bool _disposed;
