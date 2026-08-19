@@ -26,6 +26,7 @@ using System.Text.Json;
 using Spice.Auth;
 using Spice.Common;
 using Spice.Datasets;
+using Spice.Query;
 using Spice.Search;
 
 namespace Spice.Http;
@@ -281,6 +282,111 @@ internal class SpiceHttpClient : ISpiceHttpClient
 
         return JsonSerializer.Deserialize<SearchResponse>(body, SearchJsonOptions) ?? new SearchResponse();
     }
+
+    /// <summary>
+    /// Lists the synchronous queries currently running, by calling <c>GET /v1/sql/active</c>.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The running queries, empty when none are running</returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task<IReadOnlyList<ActiveQuery>> ListActiveQueriesAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+
+        var url = $"{_httpAddress}/v1/sql/active";
+        using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+
+#if NET8_0_OR_GREATER
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            throw new HttpRequestException(
+                "Listing active queries failed: the configured API key does not allow listing queries, use a key with write access.");
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"GET {url} failed with status {(int)response.StatusCode} ({response.StatusCode}): {ExtractErrorMessage(body)}");
+        }
+
+        var decoded = JsonSerializer.Deserialize<ActiveQueriesResponse>(body);
+        return decoded?.Queries ?? new List<ActiveQuery>();
+    }
+
+    /// <summary>
+    /// Cancels a running synchronous query by ID, by calling <c>POST /v1/sql/{id}/cancel</c>.
+    /// </summary>
+    /// <param name="queryId">The query ID, from <see cref="ListActiveQueriesAsync"/></param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when queryId is null, empty, or not a valid UUID</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public async Task CancelActiveQueryAsync(string queryId, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryId);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+        ThrowHelper.ThrowIfNullOrWhiteSpace(queryId, nameof(queryId));
+#endif
+
+        // queryId is caller input that reaches the runtime as a URL path segment. Reject
+        // anything that is not a canonical UUID here, rather than building a path from it:
+        // a value like "." or ".." is unreserved and survives escaping, so a proxy or server
+        // that resolves dot segments could route this POST somewhere the caller never named.
+        if (!IsValidQueryId(queryId))
+        {
+            throw new ArgumentException(
+                $"Query ID \"{queryId}\" is not a valid UUID. Use the QueryId from {nameof(ListActiveQueriesAsync)}.",
+                nameof(queryId));
+        }
+
+        var url = $"{_httpAddress}/v1/sql/{Uri.EscapeDataString(queryId)}/cancel";
+        using var response = await _httpClient.PostAsync(url, content: null, cancellationToken).ConfigureAwait(false);
+
+#if NET8_0_OR_GREATER
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+
+        switch (response.StatusCode)
+        {
+            case System.Net.HttpStatusCode.OK:
+                return;
+            case System.Net.HttpStatusCode.BadRequest:
+                throw new ArgumentException(
+                    $"Query ID \"{queryId}\" is not a valid UUID. Use the QueryId from {nameof(ListActiveQueriesAsync)}.",
+                    nameof(queryId));
+            case System.Net.HttpStatusCode.Forbidden:
+                throw new HttpRequestException(
+                    "Cancelling the query failed: the configured API key does not allow cancelling queries, use a key with write access.");
+            case System.Net.HttpStatusCode.NotFound:
+                throw new HttpRequestException(
+                    $"No active query \"{queryId}\" found: it may have already finished, or it was submitted under a different API key.");
+            default:
+                throw new HttpRequestException(
+                    $"POST {url} failed with status {(int)response.StatusCode} ({response.StatusCode}): {ExtractErrorMessage(body)}");
+        }
+    }
+
+    /// <summary>
+    /// Reports whether queryId has the exact canonical hyphenated shape the runtime parses
+    /// as a UUID (36 characters, lowercase or uppercase hex, no surrounding whitespace or
+    /// braces) — the IDs this SDK cancels always come from <see cref="ListActiveQueriesAsync"/>,
+    /// so anything looser cannot name a running query.
+    /// </summary>
+    private static bool IsValidQueryId(string queryId) =>
+        queryId.Length == 36 && Guid.TryParseExact(queryId, "D", out _);
 
     /// <summary>
     /// Pulls the runtime's error message out of a failed response body, falling back to

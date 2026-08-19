@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 using Spice.Datasets;
+using Spice.Query;
 using Spice.Search;
 
 namespace Spice.Http;
@@ -85,4 +86,22 @@ public interface ISpiceHttpClient : IDisposable
     /// <exception cref="System.ArgumentException">Thrown when the search text is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
     Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists the synchronous queries currently running, by calling <c>GET /v1/sql/active</c>.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The running queries, empty when none are running</returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task<IReadOnlyList<ActiveQuery>> ListActiveQueriesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels a running synchronous query by ID, by calling <c>POST /v1/sql/{id}/cancel</c>.
+    /// </summary>
+    /// <param name="queryId">The query ID, from <see cref="ListActiveQueriesAsync"/></param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when queryId is null, empty, or not a valid UUID</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task CancelActiveQueryAsync(string queryId, CancellationToken cancellationToken = default);
 }

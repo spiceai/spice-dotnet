@@ -27,6 +27,7 @@ using Spice.Config;
 using Spice.Datasets;
 using Spice.Flight;
 using Spice.Http;
+using Spice.Query;
 using Spice.Search;
 
 namespace Spice;
@@ -296,6 +297,72 @@ public class SpiceClient : IDisposable
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
         return HttpClient.SearchAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the synchronous queries currently running on the runtime.
+    /// </summary>
+    /// <remarks>
+    /// Synchronous queries are the ones started by <see cref="Query"/>, <see cref="QueryWithParams"/>,
+    /// FlightSQL, NSQL, and search. The runtime does not return a query's ID to the client that
+    /// submitted it, so this is how to find the ID that <see cref="CancelActiveQueryAsync"/> needs.
+    ///
+    /// <para>
+    /// Results are scoped to the authenticated principal — an API key or a client certificate —
+    /// rather than to this <see cref="SpiceClient"/> instance: every client presenting the same
+    /// credential lists the same queries. Runtime releases up to and including v2.1.5 do not scope
+    /// these endpoints at all; see
+    /// <see href="https://github.com/spiceai/spiceai/pull/12841">spiceai/spiceai#12841</see>.
+    /// </para>
+    ///
+    /// <para>
+    /// Results also cover only the one runtime instance this client's HTTP endpoint reaches, since
+    /// the runtime holds active queries in memory per process.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The running queries, empty when none are running</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task<IReadOnlyList<ActiveQuery>> ListActiveQueriesAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.ListActiveQueriesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Cancels a running synchronous query by ID.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="queryId"/> comes from <see cref="ListActiveQueriesAsync"/>. Cancellation is
+    /// scoped to the authenticated principal, not to this <see cref="SpiceClient"/> instance: any
+    /// client presenting the same credential can cancel the query, while an ID outside that scope is
+    /// reported as not found. This reaches the one runtime instance this client's HTTP endpoint
+    /// resolves to, with the same runtime-version scoping caveat described on
+    /// <see cref="ListActiveQueriesAsync"/>.
+    /// </remarks>
+    /// <param name="queryId">The query ID, from <see cref="ListActiveQueriesAsync"/></param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>A task representing the asynchronous operation</returns>
+    /// <exception cref="System.ArgumentException">Thrown when queryId is null, empty, or not a valid UUID</exception>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    public Task CancelActiveQueryAsync(string queryId, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.CancelActiveQueryAsync(queryId, cancellationToken);
     }
 
     private bool _disposed;
