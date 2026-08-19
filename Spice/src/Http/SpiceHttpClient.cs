@@ -139,6 +139,85 @@ internal class SpiceHttpClient : ISpiceHttpClient
     }
 
     /// <summary>
+    /// Checks whether the Spice runtime is healthy by calling the <c>/health</c> endpoint.
+    /// The endpoint is unauthenticated and returns 200 with a body of "ok" when the runtime is up.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports healthy, false otherwise</returns>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    public Task<bool> IsSpiceHealthyAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        return ProbeAsync($"{_httpAddress}/health", "ok", cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks whether the Spice runtime is ready to serve queries by calling the <c>/v1/ready</c> endpoint.
+    /// The runtime returns 200 with a body of "ready" once every component has loaded, and 503 until then.
+    /// On Spice.ai Cloud this endpoint is authenticated and requires an API key on the client.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    /// <returns>A task that resolves to true when the runtime reports ready, false otherwise</returns>
+    /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
+    public Task<bool> IsSpiceReadyAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        return ProbeAsync($"{_httpAddress}/v1/ready", "ready", cancellationToken);
+    }
+
+    /// <summary>
+    /// Issues a probe request and reports whether the runtime returned success with the expected body.
+    /// A probe never surfaces a transport failure as an exception — an unreachable or unhealthy runtime
+    /// is a false result, which is the state the caller is asking about. Cancellation requested by the
+    /// caller is propagated, so a probe can participate in a wider timeout.
+    /// </summary>
+    /// <param name="url">Absolute URL of the endpoint to probe</param>
+    /// <param name="expectedBody">Body the runtime returns when the probe passes, compared case-insensitively</param>
+    /// <param name="cancellationToken">Token used to cancel the probe</param>
+    private async Task<bool> ProbeAsync(string url, string expectedBody, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+#if NET8_0_OR_GREATER
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+            // Match the body exactly rather than by substring: /v1/ready answers "not ready"
+            // when the runtime is still loading, which contains the success token.
+            return string.Equals(body.Trim(), expectedBody, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // The request timed out rather than being cancelled by the caller.
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            // The runtime is unreachable, which is the answer the probe is looking for.
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Options used to serialize search requests and deserialize search responses.
     /// </summary>
     private static readonly JsonSerializerOptions SearchJsonOptions = new()
