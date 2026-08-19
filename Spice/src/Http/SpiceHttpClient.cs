@@ -24,6 +24,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Spice.Auth;
+using Spice.Common;
 using Spice.Datasets;
 using Spice.Search;
 
@@ -58,8 +59,7 @@ internal class SpiceHttpClient : ISpiceHttpClient
             };
             if (tlsClientCertFile != null && tlsClientKeyFile != null)
             {
-                var clientCert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPemFile(
-                    tlsClientCertFile, tlsClientKeyFile);
+                var clientCert = ClientCertificateLoader.LoadForClientAuth(tlsClientCertFile, tlsClientKeyFile);
                 handler.SslOptions.ClientCertificates =
                     new System.Security.Cryptography.X509Certificates.X509Certificate2Collection { clientCert };
             }
