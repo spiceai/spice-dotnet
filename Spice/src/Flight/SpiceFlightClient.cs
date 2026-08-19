@@ -182,7 +182,7 @@ internal class SpiceFlightClient : IDisposable
         // Trailers are only readable once the call has completed. Reading them
         // eagerly throws InvalidOperationException on a handshake that failed,
         // which masks the gRPC status that says what actually went wrong.
-        RpcException? failure = null;
+        Exception? failure = null;
         var token = headers.Get("authorization");
         if (token == null)
         {
@@ -191,9 +191,7 @@ internal class SpiceFlightClient : IDisposable
 
         if (token == null || _httpClient == null)
         {
-            var reason = failure == null
-                ? "the runtime returned no authorization token."
-                : DescribeRpcFailure(failure);
+            var reason = DescribeAuthFailure(failure);
 
             throw new SpiceException(
                 SpiceStatus.FailedToAuthenticate,
@@ -209,11 +207,11 @@ internal class SpiceFlightClient : IDisposable
     /// completed far enough for them to be available.
     /// </summary>
     /// <param name="stream">The handshake call</param>
-    /// <param name="failure">The gRPC failure, when the trailers could not be read</param>
+    /// <param name="failure">The failure that prevented reading the trailers, if any</param>
     /// <returns>The token entry, or null</returns>
-    private static Metadata.Entry? TryGetTrailerToken(
+    internal static Metadata.Entry? TryGetTrailerToken(
         AsyncDuplexStreamingCall<FlightHandshakeRequest, FlightHandshakeResponse> stream,
-        out RpcException? failure)
+        out Exception? failure)
     {
         failure = null;
         try
@@ -225,9 +223,10 @@ internal class SpiceFlightClient : IDisposable
             failure = ex;
             return null;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
             // The handshake never completed, so there are no trailers to read.
+            failure = ex;
             return null;
         }
     }
@@ -241,6 +240,21 @@ internal class SpiceFlightClient : IDisposable
     {
         var detail = string.IsNullOrWhiteSpace(ex.Status.Detail) ? ex.Message : ex.Status.Detail;
         return $"{ex.StatusCode} - {detail}.";
+    }
+
+    /// <summary>
+    /// Renders why the auth token could not be obtained as something a caller can act on.
+    /// </summary>
+    /// <param name="failure">The failure captured while trying to read the token, if any</param>
+    /// <returns>A short description of the failure</returns>
+    internal static string DescribeAuthFailure(Exception? failure)
+    {
+        return failure switch
+        {
+            null => "the runtime returned no authorization token.",
+            RpcException rpcEx => DescribeRpcFailure(rpcEx),
+            _ => "the handshake did not complete before trailers could be read."
+        };
     }
 
     internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)
