@@ -89,7 +89,8 @@ public sealed class RefreshOptions
     /// </summary>
     /// <param name="refreshSql">The refresh SQL statement.</param>
     /// <returns>The current instance of <see cref="RefreshOptions"/> for method chaining.</returns>
-    /// <exception cref="System.ArgumentException">Thrown when refreshSql is null or whitespace.</exception>
+    /// <exception cref="System.ArgumentNullException">Thrown when refreshSql is null.</exception>
+    /// <exception cref="System.ArgumentException">Thrown when refreshSql is empty or whitespace.</exception>
     public RefreshOptions WithRefreshSql(string refreshSql)
     {
 #if NET8_0_OR_GREATER
@@ -149,6 +150,11 @@ public sealed class RefreshOptions
 
         if (MaxJitter.HasValue)
         {
+            if (MaxJitter.Value < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(MaxJitter), MaxJitter.Value, "MaxJitter must not be negative.");
+            }
+
             body["refresh_jitter_max"] = FormatDuration(MaxJitter.Value);
         }
 

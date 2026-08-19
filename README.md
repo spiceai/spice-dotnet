@@ -170,9 +170,11 @@ await client.RefreshDatasetAsync("taxi_trips", new RefreshOptions
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `RefreshSql` | `string` | The SQL statement used for this refresh. Defaults to the dataset's `refresh_sql`. |
-| `RefreshMode` | `RefreshMode` | `Full` replaces the accelerated data; `Append` adds newly returned rows. Defaults to the dataset's `refresh_mode`. |
-| `MaxJitter` | `TimeSpan` | Maximum jitter added before the refresh starts. Defaults to the dataset's `refresh_jitter_max`. |
+| `RefreshSql` | `string?` | The SQL statement used for this refresh. Defaults to the dataset's `refresh_sql`. |
+| `RefreshMode` | `RefreshMode?` | `Full` replaces the accelerated data; `Append` adds newly returned rows. Defaults to the dataset's `refresh_mode`. |
+| `MaxJitter` | `TimeSpan?` | Maximum jitter added before the refresh starts. Defaults to the dataset's `refresh_jitter_max`. |
+
+All options are optional — leave any of them unset (`null`) to fall back to the dataset's configured value.
 
 > **Note**: On-demand refreshes apply to the `full` and `append` refresh modes. Datasets accelerated with
 > `changes` mode are kept up to date by change data capture and are not refreshed through this API.

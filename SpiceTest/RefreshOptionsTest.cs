@@ -160,4 +160,14 @@ public class RefreshOptionsTest
 
         Assert.That(json, Is.EqualTo("{}"));
     }
+
+    [Test]
+    public void Test_NegativeMaxJitterProperty_ThrowsOnSerialize()
+    {
+        // WithMaxJitter rejects negative values, but the property is also settable
+        // directly via object initializer syntax - ToJson must guard that path too.
+        var options = new RefreshOptions { MaxJitter = TimeSpan.FromSeconds(-1) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.ToJson());
+    }
 }
