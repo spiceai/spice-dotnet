@@ -55,4 +55,14 @@
         </AssemblyAttribute>
     </ItemGroup>
 
+    <!--
+        netstandard2.0 has no in-box System.Text.Json, so it needs the package. net8.0+
+        ship it in the framework, and referencing it there would push an unnecessary
+        dependency constraint onto consumers. The version matches what
+        Apache.Arrow.Adbc already resolves to, so netstandard2.0 sees no downgrade.
+    -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="System.Text.Json" Version="9.0.9" />
+    </ItemGroup>
+
 </Project>
