@@ -163,14 +163,23 @@ if (await client.IsSpiceReadyAsync())
 ```
 
 Both probes return `false` when the runtime is unreachable rather than throwing, so they can be
-polled directly. Pass a `CancellationToken` to bound how long a probe waits:
+polled directly. Pass a `CancellationToken` to end the poll loop after a deadline — cancelling it
+throws `OperationCanceledException` out of the in-flight probe call, so wrap the loop in a
+`try`/`catch` (or let it propagate) rather than expecting a `false` result:
 
 ```csharp
 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-while (!await client.IsSpiceReadyAsync(cts.Token))
+try
 {
-    await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
+    while (!await client.IsSpiceReadyAsync(cts.Token))
+    {
+        await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
+    }
+}
+catch (OperationCanceledException)
+{
+    // Did not become ready within 30 seconds.
 }
 ```
 

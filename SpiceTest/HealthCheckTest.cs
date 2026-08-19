@@ -88,7 +88,10 @@ public class HealthCheckTest
     [Test]
     public async Task Test_Probes_ReturnFalse_WhenRuntimeIsUnreachable()
     {
-        var unreachable = $"http://127.0.0.1:{StubRuntime.ReserveFreePort()}";
+        // Port 1 (TCPMUX) is a reserved low port nothing binds to in practice, so connecting
+        // reliably gets a connection-refused instead of racing another process for a port that
+        // was merely free at the moment it was reserved.
+        const string unreachable = "http://127.0.0.1:1";
         using var client = new SpiceClientBuilder().WithHttpAddress(unreachable).Build();
 
         Assert.That(await client.IsSpiceHealthyAsync(), Is.False);
@@ -160,16 +163,36 @@ public class HealthCheckTest
                         return;
                     }
 
-                    var path = context.Request.Url?.AbsolutePath ?? string.Empty;
-                    _paths.Enqueue(path);
+                    try
+                    {
+                        var path = context.Request.Url?.AbsolutePath ?? string.Empty;
+                        _paths.Enqueue(path);
 
-                    var (status, body) = respond(path);
-                    var payload = Encoding.UTF8.GetBytes(body);
-                    context.Response.StatusCode = (int)status;
-                    context.Response.ContentType = "text/plain";
-                    context.Response.ContentLength64 = payload.Length;
-                    await context.Response.OutputStream.WriteAsync(payload.AsMemory()).ConfigureAwait(false);
-                    context.Response.Close();
+                        var (status, body) = respond(path);
+                        var payload = Encoding.UTF8.GetBytes(body);
+                        context.Response.StatusCode = (int)status;
+                        context.Response.ContentType = "text/plain";
+                        context.Response.ContentLength64 = payload.Length;
+                        await context.Response.OutputStream.WriteAsync(payload.AsMemory()).ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        // The client may have disconnected, or the listener may be disposing
+                        // concurrently with this response - either way there's no caller left
+                        // to report a test failure to, and letting this fault the background
+                        // task would surface as unobserved-exception noise instead.
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            context.Response.Close();
+                        }
+                        catch (Exception)
+                        {
+                            // Same rationale as above.
+                        }
+                    }
                 }
             });
         }
