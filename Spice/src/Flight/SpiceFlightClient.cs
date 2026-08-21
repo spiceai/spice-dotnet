@@ -22,6 +22,7 @@ SOFTWARE.
 
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using Apache.Arrow.Flight;
 using Apache.Arrow.Flight.Client;
 using Grpc.Core;
@@ -30,6 +31,7 @@ using Polly.Retry;
 using Spice.Auth;
 using Spice.Common;
 using Spice.Errors;
+using Spice.Query;
 
 namespace Spice.Flight;
 
@@ -257,7 +259,7 @@ internal class SpiceFlightClient : IDisposable
         };
     }
 
-    internal async Task<FlightClientRecordBatchStreamReader> Query(string sql)
+    internal async Task<FlightClientRecordBatchStreamReader> SqlAsync(string sql)
     {
         if (string.IsNullOrEmpty(sql))
         {
@@ -278,6 +280,56 @@ internal class SpiceFlightClient : IDisposable
             var stream = _flightClient.GetStream(endpoints[0].Ticket);
             return stream.ResponseStream;
         });
+    }
+
+    /// <summary>
+    /// Submits sql for asynchronous execution via Flight DoAction and returns a handle for
+    /// polling status and retrieving results. Only available when the runtime is running in
+    /// distributed/scheduler mode.
+    /// </summary>
+    /// <param name="sql">The SQL to run</param>
+    /// <param name="parameters">Positionally-bound parameter values, or null for none</param>
+    /// <param name="cancellationToken">Token to cancel the submission</param>
+    internal async Task<AsyncQuery> QueryAsync(string sql, object? parameters, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(sql))
+        {
+            throw new ArgumentException("No SQL provided", nameof(sql));
+        }
+
+        var request = new SubmitAsyncQueryRequest { Sql = sql, Parameters = parameters };
+        var body = await DoActionAsync(AsyncQueryActions.Submit, request, cancellationToken).ConfigureAwait(false);
+
+        var response = JsonSerializer.Deserialize<SubmitAsyncQueryResponse>(body)
+            ?? throw new InvalidOperationException("Failed to parse the submit-async-query response.");
+
+        return new AsyncQuery(this, response.QueryId, response.Status);
+    }
+
+    /// <summary>
+    /// Performs a Flight DoAction call with a JSON-encoded request body and returns the
+    /// concatenated bodies of every result the runtime streams back.
+    /// </summary>
+    /// <remarks>
+    /// Authentication is already applied at channel-construction time (see
+    /// <see cref="AuthenticateAsync"/>), so unlike <see cref="SqlAsync"/>'s retry policy this does
+    /// not need a separate auth step per call.
+    /// </remarks>
+    internal async Task<byte[]> DoActionAsync(string actionType, object request, CancellationToken cancellationToken = default)
+    {
+        var body = JsonSerializer.SerializeToUtf8Bytes(request);
+        var action = new FlightAction(actionType, body);
+
+        using var call = _flightClient.DoAction(action, new Metadata(), null, cancellationToken);
+
+        using var buffer = new MemoryStream();
+        while (await call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
+        {
+            var chunk = call.ResponseStream.Current.Body.ToByteArray();
+            buffer.Write(chunk, 0, chunk.Length);
+        }
+
+        return buffer.ToArray();
     }
 
     private bool _disposed;

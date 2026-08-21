@@ -91,7 +91,7 @@ public class ParameterizedQueryIntegrationTest
     {
         try
         {
-            return await _spiceClient.QueryWithParams(sql, parameters);
+            return await _spiceClient.SqlWithParamsAsync(sql, parameters);
         }
         catch (AdbcException ex) when (ex.Message.Contains(PrepareNotSupportedMessage))
         {

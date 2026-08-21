@@ -70,7 +70,7 @@ public class FlightQueryTest
     [Test]
     public async Task TestTpchQ1()
     {
-        var result = await _spiceClient.Query(
+        var result = await _spiceClient.SqlAsync(
             """
             SELECT
                 l_returnflag,
@@ -150,7 +150,7 @@ public class FlightQueryTest
     [Test]
     public async Task TestTpchQ2()
     {
-        var result = await _spiceClient.Query(
+        var result = await _spiceClient.SqlAsync(
             """
             SELECT
                 s.s_acctbal,
@@ -233,7 +233,7 @@ public class FlightQueryTest
     [Test]
     public async Task TestTpchQ3()
     {
-        var result = await _spiceClient.Query(
+        var result = await _spiceClient.SqlAsync(
             """
             SELECT
                 l_orderkey,
@@ -307,7 +307,7 @@ public class FlightQueryTest
     [Test]
     public async Task TestTpchQ4()
     {
-        var result = await _spiceClient.Query(
+        var result = await _spiceClient.SqlAsync(
             """
             SELECT
                 o_orderpriority,
@@ -373,7 +373,7 @@ public class FlightQueryTest
     [Test]
     public async Task TestTpchQ5()
     {
-        var result = await _spiceClient.Query(
+        var result = await _spiceClient.SqlAsync(
             """
             SELECT
                 n_name,
@@ -450,7 +450,7 @@ public class FlightQueryTest
     public async Task TestTpchQ6()
     {
         // TPC-H Q6: Forecasting Revenue Change Query
-        var result = await _spiceClient.Query(@"
+        var result = await _spiceClient.SqlAsync(@"
             SELECT SUM(l_extendedprice * l_discount) AS revenue
             FROM tpch.lineitem
             WHERE l_shipdate >= DATE '1994-01-01'
@@ -488,7 +488,7 @@ public class FlightQueryTest
     public async Task TestTpchQ7()
     {
         // TPC-H Q7: Volume Shipping Query
-        var result = await _spiceClient.Query(@"
+        var result = await _spiceClient.SqlAsync(@"
             SELECT supp_nation, cust_nation, l_year, SUM(volume) AS revenue
             FROM (
                 SELECT n1.n_name AS supp_nation,
@@ -554,7 +554,7 @@ public class FlightQueryTest
     public async Task TestTpchQ8()
     {
         // TPC-H Q8: National Market Share Query
-        var result = await _spiceClient.Query(@"
+        var result = await _spiceClient.SqlAsync(@"
             SELECT o_year,
                    SUM(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / SUM(volume) AS mkt_share
             FROM (
@@ -613,7 +613,7 @@ public class FlightQueryTest
     public async Task TestTpchQ9()
     {
         // TPC-H Q9: Product Type Profit Measure Query
-        var result = await _spiceClient.Query(@"
+        var result = await _spiceClient.SqlAsync(@"
             SELECT nation, o_year, SUM(amount) AS sum_profit
             FROM (
                 SELECT n_name AS nation,
@@ -681,7 +681,7 @@ public class FlightQueryTest
     public async Task TestTpchQ10()
     {
         // TPC-H Q10: Returned Item Reporting Query
-        var result = await _spiceClient.Query(@"
+        var result = await _spiceClient.SqlAsync(@"
             SELECT c_custkey, c_name, SUM(l_extendedprice * (1 - l_discount)) AS revenue,
                    c_acctbal, n_name, c_address, c_phone, c_comment
             FROM tpch.customer, tpch.orders, tpch.lineitem, tpch.nation

@@ -27,41 +27,23 @@ using Spice;
 using var client = new SpiceClientBuilder().Build();
 ```
 
-#### Query
+#### Sql
+
+`SqlAsync` runs a query against the Flight endpoint and streams the results back synchronously:
 
 ```csharp
 using Spice;
 
 using var client = new SpiceClientBuilder().Build();
 
-var data = await client.Query("SELECT * FROM my_table LIMIT 10;");
-```
-
-#### Parameterized Queries
-
-Use parameterized queries to prevent SQL injection and improve performance:
-
-```csharp
-using Spice;
-
-using var client = new SpiceClientBuilder().Build();
-
-var parameters = new Dictionary<string, object>
-{
-    { "product_id", 42 },
-    { "min_price", 10.0 }
-};
-
-var data = await client.Query(
-    "SELECT * FROM products WHERE id = :product_id AND price >= :min_price", 
-    parameters);
+var data = await client.SqlAsync("SELECT * FROM my_table LIMIT 10;");
 ```
 
 ##### Parameterized Queries with Positional Placeholders
 
-For more control over parameter types, use `QueryWithParams` with positional placeholders (`$1`, `$2`, etc.). This uses the ADBC protocol and supports explicit type specification:
+For queries with user input, use `SqlWithParamsAsync` with positional placeholders (`$1`, `$2`, etc.) instead of interpolating values into the SQL string. This uses the ADBC protocol and supports explicit type specification:
 
-> **Note**: The `QueryWithParams` method requires the ADBC FlightSQL driver to support prepared statements.
+> **Note**: The `SqlWithParamsAsync` method requires the ADBC FlightSQL driver to support prepared statements.
 > The pure C# driver (`Apache.Arrow.Adbc.Drivers.FlightSql`) currently does not implement `Prepare()`.
 > For full parameterized query support, the Go-based interop driver (`Apache.Arrow.Adbc.Drivers.Interop.FlightSql`)
 > is required. See the [Apache ADBC documentation](https://arrow.apache.org/adbc/) for more details.
@@ -73,7 +55,7 @@ using Spice.Params;
 using var client = new SpiceClientBuilder().Build();
 
 // Basic usage with type inference
-var data = await client.QueryWithParams(
+var data = await client.SqlWithParamsAsync(
     "SELECT * FROM products WHERE id = $1 AND price >= $2",
     42,           // Inferred as Int32
     10.50         // Inferred as Double
@@ -97,7 +79,7 @@ using Spice.Params;
 using var client = new SpiceClientBuilder().Build();
 
 // Explicitly typed parameters
-var data = await client.QueryWithParams(
+var data = await client.SqlWithParamsAsync(
     "SELECT * FROM orders WHERE customer_id = $1 AND order_date >= $2 AND total > $3",
     Param.Int64(12345),                           // Explicit Int64
     Param.Date32(new DateTime(2024, 1, 1)),       // Date without time
@@ -120,7 +102,7 @@ var data = await client.QueryWithParams(
 You can mix inferred and explicit types in the same query:
 
 ```csharp
-var data = await client.QueryWithParams(
+var data = await client.SqlWithParamsAsync(
     "SELECT * FROM users WHERE name = $1 AND age > $2 AND verified = $3",
     "John",                    // Inferred as String
     Param.Int16(18),           // Explicit Int16
@@ -256,7 +238,7 @@ using var client = new SpiceClientBuilder()
     .Build();
 ```
 
-#### Query
+#### Sql
 
 ```csharp
 using Spice;
@@ -265,28 +247,10 @@ using var client = new SpiceClientBuilder()
     .WithSpiceCloud("API_KEY")
     .Build();
 
-var data = await client.Query("SELECT * FROM eth.recent_blocks LIMIT 10;");
+var data = await client.SqlAsync("SELECT * FROM eth.recent_blocks LIMIT 10;");
 ```
 
-#### Parameterized Queries
-
-```csharp
-using Spice;
-
-using var client = new SpiceClientBuilder()
-    .WithSpiceCloud("API_KEY")
-    .Build();
-
-var parameters = new Dictionary<string, object>
-{
-    { "nation_name", "CHINA" },
-    { "min_key", 0 }
-};
-
-var data = await client.Query(
-    "SELECT * FROM tpch.nation WHERE n_name = :nation_name AND n_nationkey >= :min_key", 
-    parameters);
-```
+Use `SqlWithParamsAsync` with positional placeholders (`$1`, `$2`, etc.) for queries with user input — see [Parameterized Queries with Positional Placeholders](#parameterized-queries-with-positional-placeholders) above.
 
 #### Refresh Dataset
 
@@ -349,6 +313,27 @@ matched column values in `Matches`, the row's `PrimaryKey`, the columns requeste
 `AdditionalColumns` in `Data`, and any `Metadata`. The runtime omits the last three when
 empty; they default to empty dictionaries, so they can be read without a null check.
 
+#### Async Queries
+
+`QueryAsync` submits a query for asynchronous execution over Flight and returns an
+`AsyncQuery` handle for polling status and fetching results, instead of streaming results
+directly like `SqlAsync`. This requires the runtime to be running in distributed/scheduler mode.
+
+```csharp
+using Spice;
+
+using var client = new SpiceClientBuilder().Build();
+
+var query = await client.QueryAsync("SELECT * FROM taxi_trips");
+await query.WaitAsync();
+
+using var results = await query.GetResultsAsync();
+```
+
+`QueryWithParamsAsync` submits a parameterized query the same way, binding `$1`, `$2`,
+etc. positionally. An `AsyncQuery` also exposes `GetStatusAsync` for a single status poll and
+`CancelAsync` to request cancellation.
+
 #### NSQL
 
 `NsqlAsync` answers a natural-language question by having the runtime's configured LLM
@@ -381,13 +366,13 @@ The `SpiceClient` implements `IDisposable` and should be properly disposed to re
 // Using statement (automatically disposes when scope exits)
 using (var client = new SpiceClientBuilder().WithSpiceCloud("API_KEY").Build())
 {
-    var data = await client.Query("SELECT * FROM tpch.customer LIMIT 10;");
+    var data = await client.SqlAsync("SELECT * FROM tpch.customer LIMIT 10;");
     // Process data...
 } // Client is disposed here
 
 // Or using declaration (C# 8.0+)
 using var client = new SpiceClientBuilder().WithSpiceCloud("API_KEY").Build();
-var data = await client.Query("SELECT * FROM tpch.customer LIMIT 10;");
+var data = await client.SqlAsync("SELECT * FROM tpch.customer LIMIT 10;");
 // Client is disposed at end of scope
 ```
 

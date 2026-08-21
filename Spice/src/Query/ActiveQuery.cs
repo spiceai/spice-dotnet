@@ -28,8 +28,8 @@ namespace Spice.Query;
 /// A synchronous query currently running on the Spice runtime.
 /// </summary>
 /// <remarks>
-/// Synchronous queries are the ones started by <see cref="SpiceClient.Query"/>,
-/// <see cref="SpiceClient.QueryWithParams"/>, FlightSQL, NSQL, and search. The runtime does not
+/// Synchronous queries are the ones started by <see cref="SpiceClient.SqlAsync"/>,
+/// <see cref="SpiceClient.SqlWithParamsAsync"/>, FlightSQL, NSQL, and search. The runtime does not
 /// return a query's ID to the client that submitted it, so <see cref="SpiceClient.ListActiveQueriesAsync"/>
 /// is how to find the ID that <see cref="SpiceClient.CancelActiveQueryAsync"/> needs.
 /// </remarks>
