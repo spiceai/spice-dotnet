@@ -155,7 +155,7 @@ public class NsqlResponse
     /// The rows, each keyed by column name. Values are decoded from JSON, so they carry
     /// JSON's types rather than the Arrow types named in <see cref="Schema"/> - numbers
     /// arrive as <see cref="JsonElement"/> holding a number. Use
-    /// <see cref="SpiceClient.NsqlGenerateSqlAsync"/> with <see cref="SpiceClient.Query"/>
+    /// <see cref="SpiceClient.NsqlGenerateSqlAsync"/> with <see cref="SpiceClient.SqlAsync"/>
     /// when Arrow-typed results matter.
     /// </summary>
     [JsonPropertyName("data")]

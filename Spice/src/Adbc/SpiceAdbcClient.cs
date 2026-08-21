@@ -173,7 +173,7 @@ internal sealed class SpiceAdbcClient : IDisposable
     /// <param name="sql">SQL query with positional placeholders ($1, $2, etc.)</param>
     /// <param name="parameters">The parameter values (can be plain values or Param instances)</param>
     /// <returns>An ArrowArrayStream with the query results</returns>
-    public Task<IArrowArrayStream?> QueryWithParamsAsync(string sql, params object?[] parameters)
+    public Task<IArrowArrayStream?> SqlWithParamsAsync(string sql, params object?[] parameters)
     {
         if (string.IsNullOrEmpty(sql))
         {
