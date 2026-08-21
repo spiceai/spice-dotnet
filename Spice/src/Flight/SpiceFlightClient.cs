@@ -312,7 +312,7 @@ internal class SpiceFlightClient : IDisposable
     /// </summary>
     /// <remarks>
     /// Authentication is already applied at channel-construction time (see
-    /// <see cref="AuthenticateAsync"/>), so unlike <see cref="Query"/>'s retry policy this does
+    /// <see cref="AuthenticateAsync"/>), so unlike <see cref="SqlAsync"/>'s retry policy this does
     /// not need a separate auth step per call.
     /// </remarks>
     internal async Task<byte[]> DoActionAsync(string actionType, object request, CancellationToken cancellationToken = default)

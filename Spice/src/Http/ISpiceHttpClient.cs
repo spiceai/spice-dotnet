@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 using Spice.Datasets;
+using Spice.Nsql;
 using Spice.Search;
 
 namespace Spice.Http;
@@ -85,4 +86,28 @@ public interface ISpiceHttpClient : IDisposable
     /// <exception cref="System.ArgumentException">Thrown when the search text is null or empty</exception>
     /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
     Task<SearchResponse> SearchAsync(SearchRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Answers a natural-language query by having the runtime's configured LLM generate SQL,
+    /// then running it, via the <c>/v1/nsql</c> endpoint.
+    /// </summary>
+    /// <param name="request">The natural-language query to answer</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL alongside the rows it returned</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task<NsqlResponse> NsqlAsync(NsqlRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Translates a natural-language query into SQL without running it, via the
+    /// <c>/v1/nsql</c> endpoint.
+    /// </summary>
+    /// <param name="request">The natural-language query to translate</param>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>The generated SQL</returns>
+    /// <exception cref="System.ArgumentNullException">Thrown when request is null</exception>
+    /// <exception cref="System.ArgumentException">Thrown when the query text is null or empty</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    Task<string> NsqlGenerateSqlAsync(NsqlRequest request, CancellationToken cancellationToken = default);
 }
