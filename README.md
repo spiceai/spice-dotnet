@@ -313,6 +313,36 @@ matched column values in `Matches`, the row's `PrimaryKey`, the columns requeste
 `AdditionalColumns` in `Data`, and any `Metadata`. The runtime omits the last three when
 empty; they default to empty dictionaries, so they can be read without a null check.
 
+#### Active Query Management
+
+`ListActiveQueriesAsync` reports the synchronous queries currently running on the runtime,
+and `CancelActiveQueryAsync` cancels one by ID. The runtime doesn't hand a query's ID back
+to the client that submitted it, so listing is the only way to find the ID that cancelling
+needs.
+
+```csharp
+using Spice;
+using Spice.Query;
+
+using var client = new SpiceClientBuilder().Build();
+
+var queries = await client.ListActiveQueriesAsync();
+foreach (var query in queries)
+{
+    Console.WriteLine($"{query.QueryId} {query.Protocol} {query.SqlPreview}");
+}
+
+if (queries.Count > 0)
+{
+    await client.CancelActiveQueryAsync(queries[0].QueryId);
+}
+```
+
+Both calls are scoped to the authenticated API key or client certificate — not to this
+`SpiceClient` instance — and reach only the one runtime process behind this client's HTTP
+endpoint. Runtime releases up to and including v2.1.5 do not scope either endpoint at all —
+every caller sees and can cancel every query regardless of credential.
+
 #### Async Queries
 
 `QueryAsync` submits a query for asynchronous execution over Flight and returns an
