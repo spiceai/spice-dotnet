@@ -122,7 +122,7 @@ public class SpiceClient : IDisposable
     /// </summary>
     internal bool UseBearerAuth =>
         !string.IsNullOrEmpty(ApiKey) &&
-        (string.IsNullOrEmpty(AppId) || !Auth.AuthHeaderBuilder.IsCloudAddress(FlightAddress));
+        (string.IsNullOrEmpty(AppId) || !Auth.AuthHeaderBuilder.IsCloudAddress(FlightAddress, UseTls));
 
     /// <summary>
     /// Runs sql against the Flight endpoint and streams the results back synchronously.

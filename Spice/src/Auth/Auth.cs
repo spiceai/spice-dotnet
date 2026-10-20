@@ -55,11 +55,27 @@ internal static class AuthHeaderBuilder
     /// Reports whether a Flight address points at Spice Cloud: the configured Cloud Flight
     /// address, <c>spiceai.io</c>, or any subdomain of it.
     /// </summary>
-    public static bool IsCloudAddress(string address)
+    /// <remarks>
+    /// Both addresses are compared in their normalized form (see <see cref="Common.FlightAddress.Normalize"/>),
+    /// so scheme aliases such as <c>grpc+tls://</c> and <c>https://</c> for the same endpoint match.
+    /// </remarks>
+    /// <param name="address">The Flight address</param>
+    /// <param name="useTls">Whether TLS was requested, used for an address with no scheme</param>
+    public static bool IsCloudAddress(string address, bool useTls = false)
+    {
+        return IsCloudAddress(address, useTls, Config.SpiceDefaultConfigCloud.FlightAddress);
+    }
+
+    /// <summary>
+    /// Reports whether a Flight address points at Spice Cloud, given the configured Cloud Flight address.
+    /// </summary>
+    internal static bool IsCloudAddress(string address, bool useTls, string cloudFlightAddress)
     {
         // Match FlightAddress.Normalize, which trims before connecting, so auth follows the destination.
         address = address.Trim();
-        if (string.Equals(address, Config.SpiceDefaultConfigCloud.FlightAddress, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(NormalizeForComparison(address, useTls),
+                NormalizeForComparison(cloudFlightAddress, true),
+                StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -82,6 +98,18 @@ internal static class AuthHeaderBuilder
 
         host = host.TrimEnd('.').ToLowerInvariant();
         return host == "spiceai.io" || host.EndsWith(".spiceai.io", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeForComparison(string address, bool useTls)
+    {
+        try
+        {
+            return Common.FlightAddress.Normalize(address, useTls, out _).TrimEnd('/');
+        }
+        catch (ArgumentException)
+        {
+            return address.Trim().TrimEnd('/');
+        }
     }
 
     public static AuthenticationHeaderValue BasicAuth(string appId, string apiKey)
