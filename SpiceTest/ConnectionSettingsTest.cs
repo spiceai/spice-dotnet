@@ -299,15 +299,13 @@ public class ConnectionSettingsTest
 
         public static int RedirectTargetHits => Volatile.Read(ref _redirectTargetHits);
 
-        private readonly WebApplication _app;
-        private readonly int _flightPort;
-        private readonly int _httpPort;
+        private readonly WebApplication _flightApp;
+        private readonly WebApplication _httpApp;
 
-        private AuthTestServer(WebApplication app, int flightPort, int httpPort)
+        private AuthTestServer(WebApplication flightApp, WebApplication httpApp)
         {
-            _app = app;
-            _flightPort = flightPort;
-            _httpPort = httpPort;
+            _flightApp = flightApp;
+            _httpApp = httpApp;
         }
 
         public static async Task<AuthTestServer> StartAsync()
@@ -316,53 +314,60 @@ public class ConnectionSettingsTest
             HttpApiKeys = new ConcurrentQueue<string>();
             Interlocked.Exchange(ref _redirectTargetHits, 0);
 
-            var flightPort = FreePort();
-            var httpPort = FreePort();
-            var builder = WebApplication.CreateBuilder();
-            builder.Logging.ClearProviders();
-            builder.WebHost.ConfigureKestrel(o =>
-            {
-                o.Listen(System.Net.IPAddress.Loopback, flightPort, lo => lo.Protocols = HttpProtocols.Http2);
-                o.Listen(System.Net.IPAddress.Loopback, httpPort, lo => lo.Protocols = HttpProtocols.Http1);
-            });
-            builder.Services.AddGrpc().AddFlightServer<AuthTestFlightServer>();
+            // Two hosts, each bound to port 0 so Kestrel picks the port itself (no
+            // pick-then-release race), and each with exactly one address to read back.
+            var flightBuilder = WebApplication.CreateBuilder();
+            flightBuilder.Logging.ClearProviders();
+            flightBuilder.WebHost.ConfigureKestrel(o =>
+                o.Listen(System.Net.IPAddress.Loopback, 0, lo => lo.Protocols = HttpProtocols.Http2));
+            flightBuilder.Services.AddGrpc().AddFlightServer<AuthTestFlightServer>();
+            var flightApp = flightBuilder.Build();
+            flightApp.MapFlightEndpoint();
 
-            var app = builder.Build();
-            app.MapFlightEndpoint();
-            app.MapGet("/health", (HttpContext ctx) =>
+            var httpBuilder = WebApplication.CreateBuilder();
+            httpBuilder.Logging.ClearProviders();
+            httpBuilder.WebHost.ConfigureKestrel(o =>
+                o.Listen(System.Net.IPAddress.Loopback, 0, lo => lo.Protocols = HttpProtocols.Http1));
+            var httpApp = httpBuilder.Build();
+            httpApp.MapGet("/health", (HttpContext ctx) =>
             {
                 HttpApiKeys.Enqueue(ctx.Request.Headers["X-API-Key"].ToString());
                 return "ok";
             });
             // /v1/ready redirects elsewhere, so tests can check the key is not forwarded.
-            app.MapGet("/v1/ready", () => Results.Redirect("/redirect-target"));
-            app.MapGet("/redirect-target", () =>
+            httpApp.MapGet("/v1/ready", () => Results.Redirect("/redirect-target"));
+            httpApp.MapGet("/redirect-target", () =>
             {
                 Interlocked.Increment(ref _redirectTargetHits);
                 return "ready";
             });
-            await app.StartAsync().ConfigureAwait(false);
 
-            return new AuthTestServer(app, flightPort, httpPort);
+            await flightApp.StartAsync().ConfigureAwait(false);
+            try
+            {
+                await httpApp.StartAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                await flightApp.StopAsync().ConfigureAwait(false);
+                await flightApp.DisposeAsync().ConfigureAwait(false);
+                await httpApp.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            return new AuthTestServer(flightApp, httpApp);
         }
 
-        public string HostPort => $"127.0.0.1:{_flightPort}";
+        public string HostPort => new Uri(_flightApp.Urls.First()).Authority;
 
-        public string HttpAddress => $"http://127.0.0.1:{_httpPort}";
-
-        private static int FreePort()
-        {
-            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
-            return port;
-        }
+        public string HttpAddress => _httpApp.Urls.First();
 
         public async ValueTask DisposeAsync()
         {
-            await _app.StopAsync().ConfigureAwait(false);
-            await _app.DisposeAsync().ConfigureAwait(false);
+            await _httpApp.StopAsync().ConfigureAwait(false);
+            await _httpApp.DisposeAsync().ConfigureAwait(false);
+            await _flightApp.StopAsync().ConfigureAwait(false);
+            await _flightApp.DisposeAsync().ConfigureAwait(false);
         }
     }
 
