@@ -57,6 +57,8 @@ internal static class AuthHeaderBuilder
     /// </summary>
     public static bool IsCloudAddress(string address)
     {
+        // Match FlightAddress.Normalize, which trims before connecting, so auth follows the destination.
+        address = address.Trim();
         if (string.Equals(address, Config.SpiceDefaultConfigCloud.FlightAddress, StringComparison.OrdinalIgnoreCase))
         {
             return true;

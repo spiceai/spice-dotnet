@@ -184,6 +184,7 @@ public class ConnectionSettingsTest
     [TestCase("http://localhost:50051", false)]
     [TestCase("grpc://my-server:50051", false)]
     [TestCase("https://notspiceai.io", false)]
+    [TestCase(" https://flight.spiceai.io:443 ", true)]
     public void IsCloudAddress_MatchesSpiceCloudHosts(string address, bool expected)
     {
         Assert.That(AuthHeaderBuilder.IsCloudAddress(address), Is.EqualTo(expected));
@@ -228,6 +229,25 @@ public class ConnectionSettingsTest
         });
     }
 
+    [Test]
+    public async Task ApiKey_NotForwardedOnHttpRedirect()
+    {
+        await using var server = await AuthTestServer.StartAsync();
+
+        using var client = new SpiceClientBuilder()
+            .WithFlightAddress($"grpc://{server.HostPort}")
+            .WithHttpAddress(server.HttpAddress)
+            .WithApiKey("plain-key")
+            .Build();
+        var ready = await client.IsSpiceReadyAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ready, Is.False, "the redirect is not followed");
+            Assert.That(AuthTestServer.RedirectTargetHits, Is.Zero);
+        });
+    }
+
     private static SpiceClient GetClient(SpiceClientBuilder builder)
     {
         var field = typeof(SpiceClientBuilder).GetField("_spiceClient",
@@ -242,6 +262,10 @@ public class ConnectionSettingsTest
     private sealed class AuthTestServer : IAsyncDisposable
     {
         public static ConcurrentQueue<string> HttpApiKeys { get; private set; } = new();
+
+        private static int _redirectTargetHits;
+
+        public static int RedirectTargetHits => Volatile.Read(ref _redirectTargetHits);
 
         private readonly WebApplication _app;
         private readonly int _flightPort;
@@ -258,6 +282,7 @@ public class ConnectionSettingsTest
         {
             AuthTestFlightServer.Reset();
             HttpApiKeys = new ConcurrentQueue<string>();
+            Interlocked.Exchange(ref _redirectTargetHits, 0);
 
             var flightPort = FreePort();
             var httpPort = FreePort();
@@ -276,6 +301,13 @@ public class ConnectionSettingsTest
             {
                 HttpApiKeys.Enqueue(ctx.Request.Headers["X-API-Key"].ToString());
                 return "ok";
+            });
+            // /v1/ready redirects elsewhere, so tests can check the key is not forwarded.
+            app.MapGet("/v1/ready", () => Results.Redirect("/redirect-target"));
+            app.MapGet("/redirect-target", () =>
+            {
+                Interlocked.Increment(ref _redirectTargetHits);
+                return "ready";
             });
             await app.StartAsync().ConfigureAwait(false);
 

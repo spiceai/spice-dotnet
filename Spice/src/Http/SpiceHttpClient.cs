@@ -58,6 +58,8 @@ internal class SpiceHttpClient : ISpiceHttpClient
             var handler = new SocketsHttpHandler
             {
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                // X-API-Key, unlike Authorization, survives redirects; don't forward it to another origin.
+                AllowAutoRedirect = !bearerAuth,
             };
             if (tlsClientCertFile != null && tlsClientKeyFile != null)
             {
@@ -84,7 +86,10 @@ internal class SpiceHttpClient : ISpiceHttpClient
         else
 #endif
         {
-            _httpClient = new HttpClient();
+            // X-API-Key, unlike Authorization, survives redirects; don't forward it to another origin.
+            _httpClient = bearerAuth
+                ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+                : new HttpClient();
         }
 
         // Set authorization if credentials provided
