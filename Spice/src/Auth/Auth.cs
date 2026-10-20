@@ -80,20 +80,22 @@ internal static class AuthHeaderBuilder
             return true;
         }
 
-        var host = address;
-        var schemeEnd = host.IndexOf("://", StringComparison.Ordinal);
-        if (schemeEnd >= 0)
+        // Read the host the client will actually connect to, so user info such as
+        // "spiceai.io:password@localhost" can't make a local address look like Cloud.
+        string host;
+        try
         {
-            host = host.Substring(schemeEnd + 3);
-        }
-
-        for (var i = 0; i < host.Length; i++)
-        {
-            if (host[i] == ':' || host[i] == '/')
+            var normalized = Common.FlightAddress.Normalize(address, useTls, out _);
+            if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
             {
-                host = host.Substring(0, i);
-                break;
+                return false;
             }
+
+            host = uri.IdnHost;
+        }
+        catch (ArgumentException)
+        {
+            return false;
         }
 
         host = host.TrimEnd('.').ToLowerInvariant();

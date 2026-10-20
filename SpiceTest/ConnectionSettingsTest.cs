@@ -188,6 +188,9 @@ public class ConnectionSettingsTest
     [TestCase("grpc://my-server:50051", false)]
     [TestCase("https://notspiceai.io", false)]
     [TestCase(" https://flight.spiceai.io:443 ", true)]
+    [TestCase("http://spiceai.io:password@localhost:50051", false)]
+    [TestCase("https://user@flight.spiceai.io", true)]
+    [TestCase("ftp://flight.spiceai.io", false)]
     [TestCase("https://flight.spiceai.io:443/", true)]
     public void IsCloudAddress_MatchesSpiceCloudHosts(string address, bool expected)
     {
