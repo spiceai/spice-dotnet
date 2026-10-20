@@ -194,6 +194,10 @@ public class ConnectionSettingsTest
     [TestCase("grpc+tls://private-flight.example:443", true)]
     [TestCase("https://private-flight.example:443", true)]
     [TestCase("private-flight.example:443", true)]
+    [TestCase("https://private-flight.example", true)]
+    [TestCase("grpc+tls://private-flight.example", true)]
+    [TestCase("https://PRIVATE-FLIGHT.example:443/", true)]
+    [TestCase("https://private-flight.example:8443", false)]
     [TestCase("grpc://private-flight.example:443", false)]
     [TestCase("https://other-flight.example:443", false)]
     public void IsCloudAddress_MatchesConfiguredCloudEndpointAcrossSchemeAliases(string address, bool expected)
@@ -201,6 +205,16 @@ public class ConnectionSettingsTest
         // A configured Cloud endpoint (SPICE_FLIGHT_URL) outside spiceai.io, addressed through a scheme alias.
         // An address with no scheme picks https:// from the TLS setting.
         var isCloud = AuthHeaderBuilder.IsCloudAddress(address, useTls: true, "https://private-flight.example:443");
+
+        Assert.That(isCloud, Is.EqualTo(expected));
+    }
+
+    [TestCase("https://private-flight.example:443", true)]
+    [TestCase("grpc+tls://private-flight.example:443", true)]
+    [TestCase("https://private-flight.example:8443", false)]
+    public void IsCloudAddress_ConfiguredCloudEndpointWithoutPort_MatchesDefaultPort(string address, bool expected)
+    {
+        var isCloud = AuthHeaderBuilder.IsCloudAddress(address, useTls: false, "https://private-flight.example");
 
         Assert.That(isCloud, Is.EqualTo(expected));
     }

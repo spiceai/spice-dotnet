@@ -104,7 +104,14 @@ internal static class AuthHeaderBuilder
     {
         try
         {
-            return Common.FlightAddress.Normalize(address, useTls, out _).TrimEnd('/');
+            var normalized = Common.FlightAddress.Normalize(address, useTls, out _);
+            if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+            {
+                // Uri.Port fills in the scheme's default port, so ":443" and no port compare equal.
+                return $"{uri.Scheme}://{uri.IdnHost.TrimEnd('.')}:{uri.Port}";
+            }
+
+            return normalized.TrimEnd('/');
         }
         catch (ArgumentException)
         {
