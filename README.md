@@ -226,6 +226,28 @@ using var tlsClient = new SpiceClientBuilder()
     .Build();
 ```
 
+`WithFlightAddress` accepts `grpc://`, `grpc+tcp://`, `grpc+tls://`, `http://`, and `https://` addresses.
+`grpc+tls://` and `https://` connect over TLS. Any other scheme throws an `ArgumentException`.
+
+#### Local Runtime Secured with an API Key
+
+When the runtime enables [API key auth](https://spiceai.org/docs/api/auth), pass the key as configured in
+`spicepod.yaml`:
+
+```csharp
+using Spice;
+
+using var client = new SpiceClientBuilder()
+    .WithFlightAddress("grpc://localhost:50051")
+    .WithHttpAddress("http://localhost:8090")
+    .WithApiKey("my-runtime-key")
+    .Build();
+```
+
+For any address other than Spice.ai Cloud, the key is sent as `Authorization: Bearer <key>` on Flight calls
+and as `X-API-Key` on HTTP calls. Spice.ai Cloud keys (`appId|key`) sent to Spice.ai Cloud keep using the
+Flight Basic auth handshake.
+
 ### Spice.ai Cloud
 
 #### Initialize Client

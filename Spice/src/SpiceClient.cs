@@ -105,10 +105,24 @@ public class SpiceClient : IDisposable
                 $"Both {nameof(TlsClientCertFile)} and {nameof(TlsClientKeyFile)} must be provided together for mTLS. {missing} is missing.");
         }
 
-        FlightClient = new SpiceFlightClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile);
-        AdbcClient = new SpiceAdbcClient(FlightAddress, MaxRetries, AppId, ApiKey, UserAgent, UseTls);
-        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile);
+        var flightAddress = Common.FlightAddress.Normalize(FlightAddress, UseTls, out var schemeRequiresTls);
+        var useTls = UseTls || schemeRequiresTls;
+        var bearerAuth = UseBearerAuth;
+
+        FlightClient = new SpiceFlightClient(flightAddress, MaxRetries, AppId, ApiKey, UserAgent, useTls, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile, bearerAuth);
+        AdbcClient = new SpiceAdbcClient(flightAddress, MaxRetries, AppId, ApiKey, UserAgent, useTls, bearerAuth);
+        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile, bearerAuth);
     }
+
+    /// <summary>
+    /// Whether the API key is sent directly as a Bearer token (Flight) and X-API-Key (HTTP)
+    /// instead of being exchanged through the Flight Basic handshake. Spice OSS runtimes secured
+    /// with an API key accept only the direct form, so it is used for plain keys and for any
+    /// address that is not Spice Cloud.
+    /// </summary>
+    internal bool UseBearerAuth =>
+        !string.IsNullOrEmpty(ApiKey) &&
+        (string.IsNullOrEmpty(AppId) || !Auth.AuthHeaderBuilder.IsCloudAddress(FlightAddress));
 
     /// <summary>
     /// Runs sql against the Flight endpoint and streams the results back synchronously.

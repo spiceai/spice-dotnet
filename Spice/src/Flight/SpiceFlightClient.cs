@@ -42,11 +42,11 @@ internal class SpiceFlightClient : IDisposable
     private readonly HttpClient? _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
+    private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
     {
         var options = new GrpcChannelOptions();
 
-        if (appId == null || apiKey == null)
+        if (apiKey == null || (appId == null && !bearerAuth))
         {
             // For non-authenticated connections, set credentials based on TLS preference
             if (!useTls)
@@ -131,7 +131,9 @@ internal class SpiceFlightClient : IDisposable
         {
             DefaultRequestHeaders =
             {
-                Authorization = AuthHeaderBuilder.BasicAuth(appId, apiKey)
+                Authorization = bearerAuth
+                    ? AuthHeaderBuilder.BearerAuth(apiKey)
+                    : AuthHeaderBuilder.BasicAuth(appId!, apiKey)
             }
         };
 
@@ -146,19 +148,21 @@ internal class SpiceFlightClient : IDisposable
         return responseHeaders.Get("authorization") ?? trailers.Get("authorization");
     }
 
-    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
+    internal SpiceFlightClient(string address, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
     {
         _retryPolicy = RetryPolicyFactory.CreateRpcRetryPolicy(
             maxRetries,
             (ex, ts, attempt) => RetryPolicyFactory.LogRetry("Flight", ex, ts, attempt));
 
-        var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls, tlsClientCertFile, tlsClientKeyFile, tlsRootCertFile);
+        var options = GetGrpcChannelOptions(appId, apiKey, userAgent, useTls, tlsClientCertFile, tlsClientKeyFile, tlsRootCertFile, bearerAuth);
         _httpClient = options.HttpClient;
 
         _channel = GrpcChannel.ForAddress(address, options);
         _flightClient = new FlightClient(_channel);
 
-        if (appId != null && apiKey != null)
+        // A Bearer key is the credential itself and goes out on every call; only a Spice Cloud
+        // key is exchanged for a session token through the Basic handshake.
+        if (!bearerAuth && appId != null && apiKey != null)
         {
             AuthenticateAsync().GetAwaiter().GetResult();
         }

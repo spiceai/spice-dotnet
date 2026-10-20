@@ -42,7 +42,7 @@ internal class SpiceHttpClient : ISpiceHttpClient
     private bool _disposed;
 
     internal SpiceHttpClient(string httpAddress, string? appId, string? apiKey, string? userAgent,
-        string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
+        string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
     {
 #if NET8_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(httpAddress);
@@ -88,7 +88,12 @@ internal class SpiceHttpClient : ISpiceHttpClient
         }
 
         // Set authorization if credentials provided
-        if (!string.IsNullOrEmpty(appId) && !string.IsNullOrEmpty(apiKey))
+        if (bearerAuth && !string.IsNullOrEmpty(apiKey))
+        {
+            // Spice OSS runtimes secured with an API key read it from X-API-Key.
+            _httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
+        else if (!string.IsNullOrEmpty(appId) && !string.IsNullOrEmpty(apiKey))
         {
             _httpClient.DefaultRequestHeaders.Authorization = AuthHeaderBuilder.BasicAuth(appId!, apiKey!);
         }
