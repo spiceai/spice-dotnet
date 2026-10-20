@@ -47,14 +47,16 @@ internal sealed class SpiceAdbcClient : IDisposable
     private readonly string? _apiKey;
     private readonly string? _userAgent;
     private readonly bool _useTls;
+    private readonly bool _bearerAuth;
 
     /// <summary>
     /// Creates a new ADBC client with the specified configuration.
     /// The connection is lazily initialized on first use.
     /// </summary>
-    public SpiceAdbcClient(string flightAddress, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls)
+    public SpiceAdbcClient(string flightAddress, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, bool bearerAuth = false)
     {
         _flightAddress = flightAddress;
+        _bearerAuth = bearerAuth;
         _appId = appId;
         _apiKey = apiKey;
         _userAgent = userAgent;
@@ -150,7 +152,12 @@ internal sealed class SpiceAdbcClient : IDisposable
             };
 
             // Add authentication if available
-            if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
+            if (_bearerAuth && !string.IsNullOrEmpty(_apiKey))
+            {
+                // Spice OSS runtimes secured with an API key accept only a Bearer token.
+                databaseParams["adbc.flight.sql.authorization_header"] = "Bearer " + _apiKey;
+            }
+            else if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
             {
                 databaseParams["username"] = _appId!;
                 databaseParams["password"] = _apiKey!;
