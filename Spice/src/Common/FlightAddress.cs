@@ -60,21 +60,31 @@ internal static class FlightAddress
             throw new ArgumentException($"Flight address '{address}' has no host.", nameof(address));
         }
 
+        string normalized;
         switch (scheme)
         {
             case "http":
             case "grpc":
             case "grpc+tcp":
                 schemeRequiresTls = false;
-                return "http://" + rest;
+                normalized = "http://" + rest;
+                break;
             case "https":
             case "grpc+tls":
                 schemeRequiresTls = true;
-                return "https://" + rest;
+                normalized = "https://" + rest;
+                break;
             default:
                 throw new ArgumentException(
                     $"Unsupported Flight address scheme '{scheme}' in '{address}'. Use grpc://, grpc+tls://, grpc+tcp://, http://, or https://.",
                     nameof(address));
         }
+
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
+        {
+            throw new ArgumentException($"Flight address '{address}' has no valid host.", nameof(address));
+        }
+
+        return normalized;
     }
 }

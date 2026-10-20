@@ -70,6 +70,9 @@ public class ConnectionSettingsTest
     [TestCase("ftp://my-server:50051")]
     [TestCase("grpc+unix://my-server")]
     [TestCase("grpc://")]
+    [TestCase("grpc://:50051")]
+    [TestCase("grpc:///query")]
+    [TestCase("https://")]
     public void WithFlightAddress_UnsupportedScheme_ThrowsArgumentException(string address)
     {
         Assert.Throws<ArgumentException>(() => new SpiceClientBuilder().WithFlightAddress(address));
