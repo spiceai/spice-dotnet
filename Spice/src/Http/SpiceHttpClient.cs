@@ -29,6 +29,7 @@ using Spice.Datasets;
 using Spice.Nsql;
 using Spice.Query;
 using Spice.Search;
+using Spice.Status;
 
 namespace Spice.Http;
 
@@ -241,6 +242,131 @@ internal class SpiceHttpClient : ISpiceHttpClient
             return false;
         }
     }
+
+    /// <summary>
+    /// Reports the state of each of the runtime's network-facing components, by calling
+    /// <c>GET /v1/status</c>.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>One entry per component, in the order the runtime reports them</returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    /// <exception cref="System.Text.Json.JsonException">Thrown when the response is not a list of components</exception>
+    public async Task<IReadOnlyList<ConnectionDetails>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+
+        var url = $"{_httpAddress}/v1/status";
+        using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+
+#if NET8_0_OR_GREATER
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            throw new HttpRequestException(
+                "Reading runtime status failed: the configured API key does not allow reading runtime status, use a key with read access.");
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"GET {url} failed with status {(int)response.StatusCode} ({response.StatusCode}): {ExtractErrorMessage(body)}");
+        }
+
+        return ParseRuntimeStatus(body);
+    }
+
+    /// <summary>
+    /// Reads the <c>/v1/status</c> body: a JSON array of <c>{name, endpoint, status}</c> objects.
+    /// </summary>
+    /// <remarks>
+    /// Anything else is rejected rather than coerced. An empty list would read as a runtime with no
+    /// components, and a missing field would surface later as an empty string the caller cannot tell
+    /// from a real value. Extra fields are ignored, so a newer runtime that adds one still parses.
+    /// </remarks>
+    internal static IReadOnlyList<ConnectionDetails> ParseRuntimeStatus(string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException(
+                $"Expected a JSON array of components from /v1/status, received {DescribeKind(root.ValueKind)}.");
+        }
+
+        var connections = new List<ConnectionDetails>();
+        var index = 0;
+        foreach (var entry in root.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+            {
+                throw new JsonException(
+                    $"Malformed component in /v1/status response: entry {index} is {DescribeKind(entry.ValueKind)}, not an object.");
+            }
+
+            var status = RequireString(entry, "status", index);
+            connections.Add(new ConnectionDetails
+            {
+                Name = RequireString(entry, "name", index),
+                Endpoint = RequireString(entry, "endpoint", index),
+                Status = ParseComponentStatus(status),
+                StatusText = status,
+            });
+            index++;
+        }
+
+        return connections;
+    }
+
+    private static string RequireString(JsonElement entry, string property, int index)
+    {
+        if (!entry.TryGetProperty(property, out var value))
+        {
+            throw new JsonException(
+                $"Malformed component in /v1/status response: entry {index} has no \"{property}\".");
+        }
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            throw new JsonException(
+                $"Malformed component in /v1/status response: entry {index} has a \"{property}\" that is {DescribeKind(value.ValueKind)}, not a string.");
+        }
+
+        return value.GetString()!;
+    }
+
+    /// <summary>
+    /// Maps the runtime's status string onto <see cref="ComponentStatus"/>, case-insensitively.
+    /// Matched by name rather than with <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/>,
+    /// which would also accept numbers and comma-separated flag lists.
+    /// </summary>
+    internal static ComponentStatus ParseComponentStatus(string status) => status.ToLowerInvariant() switch
+    {
+        "initializing" => ComponentStatus.Initializing,
+        "ready" => ComponentStatus.Ready,
+        "disabled" => ComponentStatus.Disabled,
+        "error" => ComponentStatus.Error,
+        "refreshing" => ComponentStatus.Refreshing,
+        "shuttingdown" => ComponentStatus.ShuttingDown,
+        "notloaded" => ComponentStatus.NotLoaded,
+        _ => ComponentStatus.Unknown,
+    };
+
+    private static string DescribeKind(JsonValueKind kind) => kind switch
+    {
+        JsonValueKind.Object => "an object",
+        JsonValueKind.Array => "an array",
+        JsonValueKind.String => "a string",
+        JsonValueKind.Number => "a number",
+        JsonValueKind.True or JsonValueKind.False => "a boolean",
+        JsonValueKind.Null => "null",
+        _ => kind.ToString(),
+    };
 
     /// <summary>
     /// Options used to serialize search requests and deserialize search responses.

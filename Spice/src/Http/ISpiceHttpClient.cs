@@ -24,6 +24,7 @@ using Spice.Datasets;
 using Spice.Nsql;
 using Spice.Query;
 using Spice.Search;
+using Spice.Status;
 
 namespace Spice.Http;
 
@@ -76,6 +77,16 @@ public interface ISpiceHttpClient : IDisposable
     /// <returns>A task that resolves to true when the runtime reports ready, false otherwise</returns>
     /// <exception cref="System.OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled</exception>
     Task<bool> IsSpiceReadyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reports the state of each of the runtime's network-facing components, by calling
+    /// <c>GET /v1/status</c>.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>One entry per component, in the order the runtime reports them</returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    /// <exception cref="System.Text.Json.JsonException">Thrown when the response is not a list of components</exception>
+    Task<IReadOnlyList<ConnectionDetails>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Runs a vector, keyword, or hybrid search against datasets with an embedding column.

@@ -207,6 +207,37 @@ catch (OperationCanceledException)
 On Spice.ai Cloud the readiness endpoint is authenticated — configure an API key with
 `WithSpiceCloud` or `WithApiKey`.
 
+#### Runtime Status
+
+`GetRuntimeStatusAsync` reports each of the runtime's network-facing components (`http`, `flight`,
+`metrics`, and `opentelemetry`) with the address it listens on and its state. Where
+`IsSpiceReadyAsync` answers yes or no, this tells you which component is not ready.
+
+```csharp
+using Spice;
+
+using var client = new SpiceClientBuilder().Build();
+
+foreach (var component in await client.GetRuntimeStatusAsync())
+{
+    Console.WriteLine($"{component.Name,-14} {component.Endpoint,-18} {component.Status}");
+}
+```
+
+Against a local runtime started with `spice run`:
+
+```console
+http           127.0.0.1:8090     Ready
+flight         127.0.0.1:50051    Ready
+metrics        N/A                Disabled
+opentelemetry  127.0.0.1:50051    Ready
+```
+
+`Status` is a `ComponentStatus` (`Initializing`, `Ready`, `Disabled`, `Error`, `Refreshing`,
+`ShuttingDown`, or `NotLoaded`). A state this SDK version does not recognize reads as `Unknown`,
+and `StatusText` keeps the value the runtime sent. Unlike the probes above,
+`GetRuntimeStatusAsync` throws `HttpRequestException` when the runtime is unreachable.
+
 #### Custom Connection Settings
 
 ```csharp
