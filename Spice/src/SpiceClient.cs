@@ -30,6 +30,7 @@ using Spice.Http;
 using Spice.Nsql;
 using Spice.Query;
 using Spice.Search;
+using Spice.Status;
 
 namespace Spice;
 
@@ -294,6 +295,32 @@ public class SpiceClient : IDisposable
         if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
 
         return HttpClient.IsSpiceReadyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Reports the state of each of the runtime's network-facing components: <c>http</c>,
+    /// <c>flight</c>, <c>metrics</c>, and <c>opentelemetry</c>, with the address each listens on.
+    /// </summary>
+    /// <remarks>
+    /// Where <see cref="IsSpiceReadyAsync"/> answers yes or no, this says which component is not
+    /// ready, and is the call to log when a client cannot connect. Unlike the probes, it throws when
+    /// the runtime is unreachable.
+    /// </remarks>
+    /// <param name="cancellationToken">Token to cancel the request</param>
+    /// <returns>One entry per component, in the order the runtime reports them</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown when the client is not initialized</exception>
+    /// <exception cref="System.Net.Http.HttpRequestException">Thrown when the HTTP request fails</exception>
+    /// <exception cref="System.Text.Json.JsonException">Thrown when the response is not a list of components</exception>
+    public Task<IReadOnlyList<ConnectionDetails>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(_disposed, this);
+#else
+        if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+#endif
+        if (HttpClient == null) throw new InvalidOperationException("HttpClient not initialized");
+
+        return HttpClient.GetRuntimeStatusAsync(cancellationToken);
     }
 
     /// <summary>
