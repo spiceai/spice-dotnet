@@ -261,7 +261,9 @@ using var tlsClient = new SpiceClientBuilder()
 `grpc+tls://` and `https://` connect over TLS. Any other scheme throws an `ArgumentException`.
 
 For a runtime whose certificate is signed by a private CA, or one that requires client certificates (mTLS), pass
-the PEM files. They apply to every call: `SqlAsync`, `SqlWithParamsAsync`, and the HTTP methods.
+the PEM files. On .NET 8 and later they apply to every call: `SqlAsync`, `SqlWithParamsAsync`, and the HTTP methods.
+On .NET Standard 2.0 only `SqlWithParamsAsync` uses them; `SqlAsync` and the HTTP methods use the system trust store
+and present no client certificate.
 
 ```csharp
 using var mtlsClient = new SpiceClientBuilder()
