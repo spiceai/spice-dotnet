@@ -48,15 +48,21 @@ internal sealed class SpiceAdbcClient : IDisposable
     private readonly string? _userAgent;
     private readonly bool _useTls;
     private readonly bool _bearerAuth;
+    private readonly string? _tlsClientCertFile;
+    private readonly string? _tlsClientKeyFile;
+    private readonly string? _tlsRootCertFile;
 
     /// <summary>
     /// Creates a new ADBC client with the specified configuration.
     /// The connection is lazily initialized on first use.
     /// </summary>
-    public SpiceAdbcClient(string flightAddress, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, bool bearerAuth = false)
+    public SpiceAdbcClient(string flightAddress, int maxRetries, string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
     {
         _flightAddress = flightAddress;
         _bearerAuth = bearerAuth;
+        _tlsClientCertFile = tlsClientCertFile;
+        _tlsClientKeyFile = tlsClientKeyFile;
+        _tlsRootCertFile = tlsRootCertFile;
         _appId = appId;
         _apiKey = apiKey;
         _userAgent = userAgent;
@@ -99,6 +105,76 @@ internal sealed class SpiceAdbcClient : IDisposable
     }
 
     /// <summary>
+    /// Builds the ADBC FlightSQL driver options: endpoint URI, credentials, TLS material and user agent.
+    /// </summary>
+    internal Dictionary<string, string> BuildDatabaseParameters()
+    {
+        // Format the URI for ADBC FlightSQL driver
+        // The driver expects grpc:// or grpc+tls:// schemes
+        var uri = _flightAddress;
+
+        // Convert http/https schemes to grpc/grpc+tls
+        if (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+#if NETSTANDARD2_0
+            uri = "grpc+tls://" + uri.Substring(8);
+#else
+            uri = string.Concat("grpc+tls://", uri.AsSpan(8));
+#endif
+        }
+        else if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+#if NETSTANDARD2_0
+            uri = "grpc://" + uri.Substring(7);
+#else
+            uri = string.Concat("grpc://", uri.AsSpan(7));
+#endif
+        }
+        else if (!uri.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase) &&
+                 !uri.StartsWith("grpc+tls://", StringComparison.OrdinalIgnoreCase) &&
+                 !uri.StartsWith("grpc+tcp://", StringComparison.OrdinalIgnoreCase))
+        {
+            // No scheme provided - add grpc or grpc+tls based on TLS setting
+            uri = _useTls ? string.Concat("grpc+tls://", uri) : string.Concat("grpc://", uri);
+        }
+
+        // Build database parameters for the ADBC FlightSQL driver
+        var databaseParams = new Dictionary<string, string>
+        {
+            { "uri", uri }
+        };
+
+        // Add authentication if available
+        if (_bearerAuth && !string.IsNullOrEmpty(_apiKey))
+        {
+            // Spice OSS runtimes secured with an API key accept only a Bearer token.
+            databaseParams["adbc.flight.sql.authorization_header"] = "Bearer " + _apiKey;
+        }
+        else if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
+        {
+            databaseParams["username"] = _appId!;
+            databaseParams["password"] = _apiKey!;
+        }
+
+        // Add user agent header
+        databaseParams["adbc.flight.sql.rpc.call_header.user-agent"] = UserAgentHelper.BuildUserAgent(_userAgent);
+
+        // Carry the same TLS material the Flight and HTTP clients use, so a parameterized
+        // query trusts a private CA and presents the mTLS client certificate like the rest.
+        if (_tlsRootCertFile != null)
+        {
+            databaseParams["adbc.flight.sql.client_option.tls_root_certs"] = File.ReadAllText(_tlsRootCertFile);
+        }
+        if (_tlsClientCertFile != null && _tlsClientKeyFile != null)
+        {
+            databaseParams["adbc.flight.sql.client_option.mtls_cert_chain"] = File.ReadAllText(_tlsClientCertFile);
+            databaseParams["adbc.flight.sql.client_option.mtls_private_key"] = File.ReadAllText(_tlsClientKeyFile);
+        }
+
+        return databaseParams;
+    }
+
+    /// <summary>
     /// Initializes the ADBC connection if not already initialized.
     /// This is thread-safe and called lazily on first parameterized query.
     /// </summary>
@@ -116,55 +192,7 @@ internal sealed class SpiceAdbcClient : IDisposable
                 return;
             }
 
-            // Format the URI for ADBC FlightSQL driver
-            // The driver expects grpc:// or grpc+tls:// schemes
-            var uri = _flightAddress;
-
-            // Convert http/https schemes to grpc/grpc+tls
-            if (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-#if NETSTANDARD2_0
-                uri = "grpc+tls://" + uri.Substring(8);
-#else
-                uri = string.Concat("grpc+tls://", uri.AsSpan(8));
-#endif
-            }
-            else if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            {
-#if NETSTANDARD2_0
-                uri = "grpc://" + uri.Substring(7);
-#else
-                uri = string.Concat("grpc://", uri.AsSpan(7));
-#endif
-            }
-            else if (!uri.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase) &&
-                     !uri.StartsWith("grpc+tls://", StringComparison.OrdinalIgnoreCase) &&
-                     !uri.StartsWith("grpc+tcp://", StringComparison.OrdinalIgnoreCase))
-            {
-                // No scheme provided - add grpc or grpc+tls based on TLS setting
-                uri = _useTls ? string.Concat("grpc+tls://", uri) : string.Concat("grpc://", uri);
-            }
-
-            // Build database parameters for the ADBC FlightSQL driver
-            var databaseParams = new Dictionary<string, string>
-            {
-                { "uri", uri }
-            };
-
-            // Add authentication if available
-            if (_bearerAuth && !string.IsNullOrEmpty(_apiKey))
-            {
-                // Spice OSS runtimes secured with an API key accept only a Bearer token.
-                databaseParams["adbc.flight.sql.authorization_header"] = "Bearer " + _apiKey;
-            }
-            else if (!string.IsNullOrEmpty(_appId) && !string.IsNullOrEmpty(_apiKey))
-            {
-                databaseParams["username"] = _appId!;
-                databaseParams["password"] = _apiKey!;
-            }
-
-            // Add user agent header
-            databaseParams["adbc.flight.sql.rpc.call_header.user-agent"] = UserAgentHelper.BuildUserAgent(_userAgent);
+            var databaseParams = BuildDatabaseParameters();
 
             // Load the ADBC FlightSQL driver from the application base directory
             var driverPath = ResolveNativeDriverPath();
