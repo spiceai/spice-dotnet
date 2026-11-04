@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Lets NuGet/login get a GitHub OIDC token for nuget.org trusted publishing.
 
     steps:
       - name: Checkout code
@@ -43,5 +46,13 @@ jobs:
       - name: Pack the project (includes all frameworks)
         run: dotnet pack Spice/Spice.csproj --configuration Release --no-build --output ./artifacts
 
+      # Exchanges the GitHub OIDC token for a nuget.org API key that is valid for 1 hour.
+      # NUGET_USER is the nuget.org profile name (not the email) that owns the trusted publishing policy.
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Publish to NuGet
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
