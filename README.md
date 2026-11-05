@@ -260,6 +260,20 @@ using var tlsClient = new SpiceClientBuilder()
 `WithFlightAddress` accepts `grpc://`, `grpc+tcp://`, `grpc+tls://`, `http://`, and `https://` addresses.
 `grpc+tls://` and `https://` connect over TLS. Any other scheme throws an `ArgumentException`.
 
+For a runtime whose certificate is signed by a private CA, or one that requires client certificates (mTLS), pass
+the PEM files. On .NET 8 and later they apply to every call: `SqlAsync`, `SqlWithParamsAsync`, and the HTTP methods.
+On .NET Standard 2.0 only `SqlWithParamsAsync` uses them; `SqlAsync` and the HTTP methods use the system trust store
+and present no client certificate.
+
+```csharp
+using var mtlsClient = new SpiceClientBuilder()
+    .WithFlightAddress("grpc+tls://my-server:50051")
+    .WithHttpAddress("https://my-server:8090")
+    .WithTlsRootCertificate("certs/ca.pem")
+    .WithTlsClientCertificate("certs/client.pem", "certs/client.key") // optional, for mTLS
+    .Build();
+```
+
 #### Local Runtime Secured with an API Key
 
 When the runtime enables [API key auth](https://spiceai.org/docs/api/auth), pass the key as configured in
