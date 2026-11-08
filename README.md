@@ -260,6 +260,9 @@ using var tlsClient = new SpiceClientBuilder()
 `WithFlightAddress` accepts `grpc://`, `grpc+tcp://`, `grpc+tls://`, `http://`, and `https://` addresses.
 `grpc+tls://` and `https://` connect over TLS. Any other scheme throws an `ArgumentException`.
 
+The Flight client accepts messages of up to 100 MiB, the same limit the runtime applies to messages it receives.
+The runtime sends each record batch as one message, so a batch of wide rows (nested columns, long strings) can be larger than gRPC's default of 4 MiB.
+
 #### Local Runtime Secured with an API Key
 
 When the runtime enables [API key auth](https://spiceai.org/docs/api/auth), pass the key as configured in
