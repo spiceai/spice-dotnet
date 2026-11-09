@@ -482,38 +482,24 @@ internal sealed class SpiceAdbcClient : IDisposable
 
     private static TimestampArray CreateTimestampArray(object? value, TimestampType type)
     {
-        var builder = new TimestampArray.Builder(type);
-        if (value == null)
+        // A long is already a count of type.Unit since the epoch: bind it as is. Going through
+        // DateTimeOffset would round nanoseconds to 100 ns ticks. DateTime and DateTimeOffset use
+        // the same checked conversion as Param.Timestamp, because TimestampArray.Builder's own
+        // conversion wraps silently outside the nanosecond range.
+        long? raw = value switch
         {
-            builder.AppendNull();
-        }
-        else if (value is long longValue)
+            long longValue => longValue,
+            DateTime dt => TimestampValue.FromInstant(
+                new DateTimeOffset(dt.ToUniversalTime(), TimeSpan.Zero), type.Unit, nameof(value)),
+            DateTimeOffset dto => TimestampValue.FromInstant(dto, type.Unit, nameof(value)),
+            _ => null,
+        };
+        if (raw is null)
         {
-            // longValue is already in the correct unit, convert to DateTimeOffset
-            long ticks = type.Unit switch
-            {
-                TimeUnit.Second => longValue * TimeSpan.TicksPerSecond,
-                TimeUnit.Millisecond => longValue * TimeSpan.TicksPerMillisecond,
-                TimeUnit.Microsecond => longValue * 10,
-                TimeUnit.Nanosecond => longValue / 100,
-                _ => throw new ArgumentOutOfRangeException(nameof(type), type.Unit, "Unsupported timestamp time unit")
-            };
-            var dto = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(ticks);
-            builder.Append(dto);
+            return new TimestampArray.Builder(type).AppendNull().Build();
         }
-        else if (value is DateTime dt)
-        {
-            builder.Append(new DateTimeOffset(dt.ToUniversalTime()));
-        }
-        else if (value is DateTimeOffset dto)
-        {
-            builder.Append(dto);
-        }
-        else
-        {
-            builder.AppendNull();
-        }
-        return builder.Build();
+        var values = new ArrowBuffer.Builder<long>(1).Append(raw.Value).Build();
+        return new TimestampArray(type, values, ArrowBuffer.Empty, length: 1, nullCount: 0, offset: 0);
     }
 
     private static Decimal128Array CreateDecimal128Array(object? value, Decimal128Type type)
