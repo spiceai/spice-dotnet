@@ -77,6 +77,33 @@ public class TimestampParamTest
     }
 
     [Test]
+    public void RawDateTimeWithExplicitType_BeyondNanosecondRange_Throws()
+    {
+        // new Param(DateTime, TimestampType) hands the DateTime itself to the ADBC array builder,
+        // which converts it there rather than in Param.Timestamp.
+        var nanos = new TimestampType(TimeUnit.Nanosecond, "UTC");
+        var farFuture = new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        foreach (var value in new object[] { farFuture, new DateTimeOffset(farFuture) })
+        {
+            var ex = Assert.Throws<TargetInvocationException>(() => Bound(new Param(value, nanos)));
+            Assert.That(ex!.InnerException, Is.InstanceOf<ArgumentOutOfRangeException>(), value.GetType().Name);
+        }
+    }
+
+    [Test]
+    public void RawDateTimeWithExplicitType_IsBoundExactly()
+    {
+        var utc = new DateTime(2026, 11, 1, 8, 30, 0, DateTimeKind.Utc).AddTicks(1234567);
+        var offset = new DateTimeOffset(2026, 11, 1, 1, 30, 0, TimeSpan.FromHours(-7)).AddTicks(1234567);
+        var nanos = new TimestampType(TimeUnit.Nanosecond, "UTC");
+        Assert.That(Bound(new Param(utc, nanos)), Is.EqualTo(1_793_521_800_123_456_700L));
+        Assert.That(Bound(new Param(offset, nanos)), Is.EqualTo(1_793_521_800_123_456_700L));
+
+        var justBefore = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddTicks(-1);
+        Assert.That(Bound(new Param(justBefore, new TimestampType(TimeUnit.Second, "UTC"))), Is.EqualTo(-1L));
+    }
+
+    [Test]
     public void NanosecondRangeEdges_AreBound()
     {
         // Arrow nanosecond timestamps cover 1677-09-21T00:12:43.145224192Z to 2262-04-11T23:47:16.854775807Z;

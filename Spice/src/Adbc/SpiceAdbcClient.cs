@@ -484,8 +484,9 @@ internal sealed class SpiceAdbcClient : IDisposable
     {
         // A long is already a count of type.Unit since the epoch: bind it as is. Going through
         // DateTimeOffset would round nanoseconds to 100 ns ticks. DateTime and DateTimeOffset use
-        // the same checked conversion as Param.Timestamp, because TimestampArray.Builder's own
-        // conversion wraps silently outside the nanosecond range.
+        // the same checked, flooring conversion as Param.Timestamp: TimestampArray.Builder's own
+        // conversion truncates pre-epoch remainders toward the epoch and throws a bare
+        // OverflowException outside the nanosecond range.
         long? raw = value switch
         {
             long longValue => longValue,
