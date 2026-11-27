@@ -50,9 +50,9 @@ public class FlightQueryTest
         }
         else
         {
-            if (ApiKey == null)
+            if (string.IsNullOrWhiteSpace(ApiKey))
             {
-                Assert.Ignore("Skipping test: SCP_SPICEAI_TPCH_API_KEY environment variable not set.");
+                Assert.Ignore("Skipping test: SCP_SPICEAI_TPCH_API_KEY environment variable not set or empty.");
                 return;
             }
             _spiceClient = new SpiceClientBuilder()

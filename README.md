@@ -291,7 +291,7 @@ using var client = new SpiceClientBuilder()
 
 For any address other than Spice.ai Cloud, the key is sent as `Authorization: Bearer <key>` on Flight calls
 and as `X-API-Key` on HTTP calls. Spice.ai Cloud keys (`appId|key`) sent to Spice.ai Cloud keep using the
-Flight Basic auth handshake.
+Flight Basic auth handshake; HTTP calls send the full key as `X-API-Key` for every key and address.
 
 ### Spice.ai Cloud
 

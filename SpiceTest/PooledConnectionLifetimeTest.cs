@@ -58,7 +58,7 @@ public class PooledConnectionLifetimeTest
     {
         using var pki = new MtlsTest.TestPki();
         using var httpClient = new SpiceHttpClient(
-            "https://127.0.0.1:1", appId: null, apiKey: null, userAgent: null,
+            "https://127.0.0.1:1", apiKey: null, userAgent: null,
             tlsClientCertFile: pki.ClientCertFile, tlsClientKeyFile: pki.ClientKeyFile, tlsRootCertFile: pki.CaCertFile);
 
         var handler = GetSocketsHandler(httpClient);
@@ -72,7 +72,7 @@ public class PooledConnectionLifetimeTest
     {
         using var pki = new MtlsTest.TestPki();
         using var httpClient = new SpiceHttpClient(
-            "https://127.0.0.1:1", appId: null, apiKey: null, userAgent: null,
+            "https://127.0.0.1:1", apiKey: null, userAgent: null,
             tlsClientCertFile: null, tlsClientKeyFile: null, tlsRootCertFile: pki.CaCertFile);
 
         var handler = GetSocketsHandler(httpClient);
@@ -84,7 +84,7 @@ public class PooledConnectionLifetimeTest
     [Test]
     public void Test_PooledConnectionLifetime_NotAppliedWithoutTlsConfiguration()
     {
-        using var httpClient = new SpiceHttpClient("http://127.0.0.1:1", appId: null, apiKey: null, userAgent: null);
+        using var httpClient = new SpiceHttpClient("http://127.0.0.1:1", apiKey: null, userAgent: null);
 
         var handler = GetSocketsHandler(httpClient);
 
