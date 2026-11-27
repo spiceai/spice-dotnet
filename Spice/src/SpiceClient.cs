@@ -116,10 +116,10 @@ public class SpiceClient : IDisposable
     }
 
     /// <summary>
-    /// Whether the API key is sent directly as a Bearer token (Flight) and X-API-Key (HTTP)
-    /// instead of being exchanged through the Flight Basic handshake. Spice OSS runtimes secured
-    /// with an API key accept only the direct form, so it is used for plain keys and for any
-    /// address that is not Spice Cloud.
+    /// Whether Flight calls send the API key directly as a Bearer token instead of exchanging it
+    /// through the Flight Basic handshake. Spice OSS runtimes secured with an API key accept only
+    /// the direct form, so it is used for plain keys and for any address that is not Spice Cloud.
+    /// HTTP calls always send the key as <c>X-API-Key</c>, whatever this returns.
     /// </summary>
     internal bool UseBearerAuth =>
         !string.IsNullOrEmpty(ApiKey) &&

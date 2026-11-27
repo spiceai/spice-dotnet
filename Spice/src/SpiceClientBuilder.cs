@@ -75,10 +75,10 @@ public class SpiceClientBuilder
     /// </summary>
     /// <remarks>
     /// Accepts a plain key, as configured on a Spice OSS runtime secured with an API key, or a
-    /// Spice Cloud key in the form <c>appId|key</c>. A plain key, or any key sent to an address that
-    /// is not Spice Cloud, is sent as <c>Authorization: Bearer &lt;key&gt;</c> on Flight calls and as
-    /// <c>X-API-Key</c> on HTTP calls. A Spice Cloud key sent to Spice Cloud uses the Flight Basic
-    /// handshake.
+    /// Spice Cloud key in the form <c>appId|key</c>. HTTP calls always send the full key as
+    /// <c>X-API-Key</c>. On Flight calls, a plain key, or any key sent to an address that is not
+    /// Spice Cloud, is sent as <c>Authorization: Bearer &lt;key&gt;</c>; a Spice Cloud key sent to
+    /// Spice Cloud uses the Flight Basic handshake.
     /// </remarks>
     /// <param name="apiKey">The runtime API key, or a Spice Cloud key in the form 'appId|key'</param>
     /// <returns>The current instance of <see cref="SpiceClientBuilder"/> for method chaining.</returns>
