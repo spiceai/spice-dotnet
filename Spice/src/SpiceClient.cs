@@ -112,7 +112,7 @@ public class SpiceClient : IDisposable
 
         FlightClient = new SpiceFlightClient(flightAddress, MaxRetries, AppId, ApiKey, UserAgent, useTls, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile, bearerAuth);
         AdbcClient = new SpiceAdbcClient(flightAddress, MaxRetries, AppId, ApiKey, UserAgent, useTls, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile, bearerAuth);
-        HttpClient = new SpiceHttpClient(HttpAddress, AppId, ApiKey, UserAgent, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile, bearerAuth);
+        HttpClient = new SpiceHttpClient(HttpAddress, ApiKey, UserAgent, TlsClientCertFile, TlsClientKeyFile, TlsRootCertFile);
     }
 
     /// <summary>

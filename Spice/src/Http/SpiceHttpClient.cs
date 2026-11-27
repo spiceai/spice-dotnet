@@ -23,7 +23,6 @@ SOFTWARE.
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Spice.Auth;
 using Spice.Common;
 using Spice.Datasets;
 using Spice.Nsql;
@@ -42,9 +41,19 @@ internal class SpiceHttpClient : ISpiceHttpClient
     private readonly string _httpAddress;
     private bool _disposed;
 
-    internal SpiceHttpClient(string httpAddress, string? appId, string? apiKey, string? userAgent,
-        string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
+    /// <summary>
+    /// Creates the HTTP client.
+    /// </summary>
+    /// <remarks>
+    /// The API key goes out as <c>X-API-Key</c> on every request, for plain keys and Spice Cloud
+    /// keys (<c>appId|secret</c>) alike. Spice runtimes and the Spice Cloud data plane accept only
+    /// <c>X-API-Key</c> or <c>Authorization: Bearer</c> on HTTP; Basic auth is used only for the
+    /// Flight handshake with a Cloud key.
+    /// </remarks>
+    internal SpiceHttpClient(string httpAddress, string? apiKey, string? userAgent,
+        string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null)
     {
+        var sendsApiKey = !string.IsNullOrEmpty(apiKey);
 #if NET8_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(httpAddress);
 #else
@@ -60,7 +69,7 @@ internal class SpiceHttpClient : ISpiceHttpClient
             {
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                 // X-API-Key, unlike Authorization, survives redirects; don't forward it to another origin.
-                AllowAutoRedirect = !bearerAuth,
+                AllowAutoRedirect = !sendsApiKey,
             };
             if (tlsClientCertFile != null && tlsClientKeyFile != null)
             {
@@ -88,26 +97,36 @@ internal class SpiceHttpClient : ISpiceHttpClient
 #endif
         {
             // X-API-Key, unlike Authorization, survives redirects; don't forward it to another origin.
-            _httpClient = bearerAuth
+            _httpClient = sendsApiKey
                 ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
                 : new HttpClient();
         }
 
-        // Set authorization if credentials provided
-        if (bearerAuth && !string.IsNullOrEmpty(apiKey))
+        ApplyDefaultHeaders(_httpClient, apiKey, userAgent);
+    }
+
+    /// <summary>
+    /// Creates the HTTP client over a caller-supplied handler. Used by tests to observe the
+    /// requests the client sends.
+    /// </summary>
+    internal SpiceHttpClient(string httpAddress, string? apiKey, string? userAgent, HttpMessageHandler handler)
+    {
+        _httpAddress = httpAddress;
+        _httpClient = new HttpClient(handler);
+        ApplyDefaultHeaders(_httpClient, apiKey, userAgent);
+    }
+
+    private static void ApplyDefaultHeaders(HttpClient httpClient, string? apiKey, string? userAgent)
+    {
+        if (!string.IsNullOrEmpty(apiKey))
         {
-            // Spice OSS runtimes secured with an API key read it from X-API-Key.
-            _httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
-        }
-        else if (!string.IsNullOrEmpty(appId) && !string.IsNullOrEmpty(apiKey))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = AuthHeaderBuilder.BasicAuth(appId!, apiKey!);
+            // The full key, including the "appId|" prefix of a Spice Cloud key.
+            httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         }
 
-        // Set user agent
         if (!string.IsNullOrEmpty(userAgent))
         {
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
+            httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
         }
     }
 
