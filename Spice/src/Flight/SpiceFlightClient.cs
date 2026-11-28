@@ -42,9 +42,16 @@ internal class SpiceFlightClient : IDisposable
     private readonly HttpClient? _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
+    /// <summary>
+    /// The largest Flight message the client accepts: 100 MiB, the limit the runtime applies to
+    /// Flight messages it receives. The runtime sends each record batch as one message, so a batch
+    /// of wide rows can exceed gRPC's default of 4 MiB and fail with RESOURCE_EXHAUSTED.
+    /// </summary>
+    internal const int MaxReceiveMessageSize = 100 * 1024 * 1024;
+
     private static GrpcChannelOptions GetGrpcChannelOptions(string? appId, string? apiKey, string? userAgent, bool useTls, string? tlsClientCertFile = null, string? tlsClientKeyFile = null, string? tlsRootCertFile = null, bool bearerAuth = false)
     {
-        var options = new GrpcChannelOptions();
+        var options = new GrpcChannelOptions { MaxReceiveMessageSize = MaxReceiveMessageSize };
 
         if (apiKey == null || (appId == null && !bearerAuth))
         {
