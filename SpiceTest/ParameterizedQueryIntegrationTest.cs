@@ -757,6 +757,33 @@ public class ParameterizedQueryIntegrationTest
         Assert.Pass("Query with quotes in parameter executed successfully");
     }
 
+    [TestCase(1L)]
+    [TestCase(-1L)]
+    public async Task Test_QueryWithParams_RawNanosecondTimestamp_RoundTripsExactly(long nanos)
+    {
+        using var result = await QueryWithParamsOrSkip(
+            "SELECT $1 AS ts",
+            Param.Timestamp(nanos, TimeUnit.Nanosecond));
+
+        Assert.That(result, Is.Not.Null);
+        var batches = new List<RecordBatch>();
+        while (await result!.ReadNextRecordBatchAsync() is { } batch)
+        {
+            batches.Add(batch);
+        }
+
+        Assert.That(batches.Sum(b => b.Length), Is.EqualTo(1));
+        var ts = (TimestampArray)batches.First(b => b.Length > 0).Column("ts");
+        var type = (TimestampType)ts.Data.DataType;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ts.IsNull(0), Is.False);
+            Assert.That(ts.GetValue(0), Is.EqualTo(nanos));
+            Assert.That(type.Unit, Is.EqualTo(TimeUnit.Nanosecond));
+            Assert.That(type.Timezone, Is.Null);
+        });
+    }
+
     // ============ Helper Methods ============
 
     private static async Task<int> CountResults(Task<Apache.Arrow.Ipc.IArrowArrayStream?> resultTask)

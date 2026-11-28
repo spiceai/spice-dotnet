@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 using Apache.Arrow.Types;
+using Spice.Common;
 
 namespace Spice.Params;
 
@@ -199,34 +200,31 @@ public sealed class Param
         new(value, new TimestampType(unit, timezone ?? TimeZoneInfo.Utc.Id));
 
     /// <summary>Creates a parameter with Timestamp type from a DateTime.</summary>
+    /// <remarks>
+    /// The DateTime is converted to UTC with <see cref="DateTime.ToUniversalTime"/>, so a
+    /// <see cref="DateTimeKind.Unspecified"/> value is read as local time. A remainder finer
+    /// than <paramref name="unit"/> floors toward the earlier instant.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="unit"/> is <see cref="TimeUnit.Nanosecond"/> and the instant is outside
+    /// 1677-09-21 to 2262-04-11 UTC, the range of a 64-bit nanosecond count.
+    /// </exception>
     public static Param Timestamp(DateTime dateTime, TimeUnit unit = TimeUnit.Microsecond, string? timezone = null)
     {
-        var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var ticks = (dateTime.ToUniversalTime() - epoch).Ticks;
-        long value = unit switch
-        {
-            TimeUnit.Second => ticks / TimeSpan.TicksPerSecond,
-            TimeUnit.Millisecond => ticks / TimeSpan.TicksPerMillisecond,
-            TimeUnit.Microsecond => ticks / 10,
-            TimeUnit.Nanosecond => ticks * 100,
-            _ => throw new ArgumentOutOfRangeException(nameof(unit))
-        };
+        var instant = new DateTimeOffset(dateTime.ToUniversalTime(), TimeSpan.Zero);
+        var value = TimestampValue.FromInstant(instant, unit, nameof(dateTime));
         return new Param(value, new TimestampType(unit, timezone ?? TimeZoneInfo.Utc.Id));
     }
 
     /// <summary>Creates a parameter with Timestamp type from a DateTimeOffset.</summary>
+    /// <remarks>A remainder finer than <paramref name="unit"/> floors toward the earlier instant.</remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="unit"/> is <see cref="TimeUnit.Nanosecond"/> and the instant is outside
+    /// 1677-09-21 to 2262-04-11 UTC, the range of a 64-bit nanosecond count.
+    /// </exception>
     public static Param Timestamp(DateTimeOffset dateTimeOffset, TimeUnit unit = TimeUnit.Microsecond, string? timezone = null)
     {
-        var epoch = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var ticks = (dateTimeOffset - epoch).Ticks;
-        long value = unit switch
-        {
-            TimeUnit.Second => ticks / TimeSpan.TicksPerSecond,
-            TimeUnit.Millisecond => ticks / TimeSpan.TicksPerMillisecond,
-            TimeUnit.Microsecond => ticks / 10,
-            TimeUnit.Nanosecond => ticks * 100,
-            _ => throw new ArgumentOutOfRangeException(nameof(unit))
-        };
+        var value = TimestampValue.FromInstant(dateTimeOffset, unit, nameof(dateTimeOffset));
         return new Param(value, new TimestampType(unit, timezone ?? TimeZoneInfo.Utc.Id));
     }
 

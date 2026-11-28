@@ -97,6 +97,8 @@ var data = await client.SqlWithParamsAsync(
 // - Null: Param.Null
 ```
 
+`Param.Timestamp(DateTime | DateTimeOffset, unit)` binds the instant as a count of `unit` since the Unix epoch, flooring any finer remainder. A nanosecond timestamp only covers 1677-09-21 to 2262-04-11 UTC, so an instant outside that range throws `ArgumentOutOfRangeException` instead of binding a wrapped value; use `TimeUnit.Microsecond` for it. `Param.Timestamp(long, unit)` binds the number exactly as given.
+
 ##### Mixed Parameters
 
 You can mix inferred and explicit types in the same query:
